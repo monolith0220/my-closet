@@ -1,0 +1,18 @@
+import { createRouter, createWebHistory } from 'vue-router'
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [
+    { path: '/', redirect: '/closet' },
+    { path: '/closet', name: 'closet', component: () => import('../views/ClosetView.vue') },
+    { path: '/closet/new', name: 'new-item', component: () => import('../views/ItemFormView.vue') },
+    { path: '/closet/:id/edit', name: 'edit-item', component: () => import('../views/ItemFormView.vue') },
+    { path: '/closet/:id', name: 'item', component: () => import('../views/ItemDetailView.vue') },
+    { path: '/ai', name: 'ai', component: () => import('../views/AiView.vue') },
+    { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
+    { path: '/:pathMatch(.*)*', redirect: '/closet' },
+  ],
+  scrollBehavior() { return { top: 0 } },
+})
+
+export default router
