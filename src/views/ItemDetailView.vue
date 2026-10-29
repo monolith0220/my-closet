@@ -68,33 +68,30 @@ onMounted(load)
       <div class="w-10" />
     </header>
 
-    <div v-if="loading" class="space-y-5" aria-label="読み込み中"><div class="aspect-[4/5] animate-pulse rounded-2xl bg-neutral-200" /><div class="h-6 w-2/3 animate-pulse rounded bg-neutral-200" /><div class="h-28 animate-pulse rounded-2xl bg-neutral-200" /></div>
+    <div v-if="loading" class="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4 sm:grid-cols-[136px_minmax(0,1fr)]" aria-label="読み込み中">
+      <div class="aspect-[4/5] animate-pulse rounded-2xl bg-neutral-200" />
+      <div class="space-y-4 pt-1"><div class="h-3 w-1/3 animate-pulse rounded bg-neutral-200" /><div class="h-6 w-full animate-pulse rounded bg-neutral-200" /><div v-for="i in 4" :key="i" class="h-8 animate-pulse rounded bg-neutral-100" /></div>
+    </div>
     <div v-else-if="!item" class="surface-card px-6 py-10 text-center"><p role="alert" class="text-sm text-red-700">{{ errorMessage }}</p><button type="button" class="secondary-button mt-6" @click="router.push('/closet')">一覧に戻る</button></div>
     <template v-else>
-      <div class="aspect-[4/5] overflow-hidden rounded-2xl bg-[#ecece9]">
-        <img v-if="imageUrl" :src="imageUrl" :alt="item.name" class="h-full w-full object-cover" />
-        <div v-else class="flex h-full flex-col items-center justify-center gap-3 text-neutral-300"><AppIcon name="shirt" :size="56" /><span class="text-xs">NO PHOTO</span></div>
-      </div>
-
-      <section class="mt-7">
-        <p class="eyebrow">{{ item.brand }}</p>
-        <h1 class="mt-2 text-[26px] font-bold leading-snug tracking-tight">{{ item.name }}</h1>
-        <div class="mt-4 flex flex-wrap gap-2">
-          <span class="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600">{{ item.category }}</span>
-          <span class="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600">{{ item.color }}</span>
-          <span v-if="item.size" class="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-neutral-600">{{ item.size }}</span>
+      <section class="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4 sm:grid-cols-[136px_minmax(0,1fr)]" aria-label="アイテムの詳細">
+        <div class="aspect-[4/5] overflow-hidden rounded-2xl bg-[#ecece9]">
+          <img v-if="imageUrl" :src="imageUrl" :alt="item.name" class="h-full w-full object-contain" />
+          <div v-else class="flex h-full flex-col items-center justify-center gap-2 text-neutral-300"><AppIcon name="shirt" :size="36" /><span class="text-[10px]">NO PHOTO</span></div>
         </div>
-      </section>
-
-      <section class="surface-card mt-7 divide-y divide-neutral-100 px-5">
-        <div class="flex items-start justify-between gap-5 py-4"><span class="shrink-0 text-xs text-neutral-400">ブランド</span><span class="text-right text-sm font-semibold">{{ item.brand }}</span></div>
-        <div class="flex items-start justify-between gap-5 py-4"><span class="shrink-0 text-xs text-neutral-400">カテゴリ</span><span class="text-right text-sm font-semibold">{{ item.category }}</span></div>
-        <div class="flex items-start justify-between gap-5 py-4"><span class="shrink-0 text-xs text-neutral-400">カラー</span><span class="text-right text-sm font-semibold">{{ item.color }}</span></div>
-        <div v-if="item.size" class="flex items-start justify-between gap-5 py-4"><span class="shrink-0 text-xs text-neutral-400">サイズ</span><span class="text-right text-sm font-semibold">{{ item.size }}</span></div>
-        <div v-if="item.seasons.length" class="flex items-start justify-between gap-5 py-4"><span class="shrink-0 text-xs text-neutral-400">季節</span><span class="text-right text-sm font-semibold">{{ item.seasons.join('・') }}</span></div>
-        <div v-if="item.style_tags.length" class="flex items-start justify-between gap-5 py-4"><span class="shrink-0 text-xs text-neutral-400">スタイル</span><span class="text-right text-sm font-semibold">{{ item.style_tags.join('・') }}</span></div>
-        <div v-if="item.product_code" class="flex items-start justify-between gap-5 py-4"><span class="shrink-0 text-xs text-neutral-400">商品番号</span><span class="break-all text-right text-sm font-semibold">{{ item.product_code }}</span></div>
-        <div v-if="productLink" class="flex items-start justify-between gap-5 py-4"><span class="shrink-0 text-xs text-neutral-400">商品ページ</span><a :href="productLink" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 break-all text-right text-sm font-semibold text-neutral-900 underline underline-offset-4">リンクを開く<AppIcon name="arrow-right" :size="15" /></a></div>
+        <div class="min-w-0">
+          <p class="eyebrow">{{ item.brand }}</p>
+          <h1 class="mt-2 break-words text-lg font-bold leading-snug tracking-tight sm:text-xl">{{ item.name }}</h1>
+          <dl class="mt-4 divide-y divide-neutral-200">
+            <div class="py-2"><dt class="text-[11px] text-neutral-400">カテゴリ</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.category }}</dd></div>
+            <div class="py-2"><dt class="text-[11px] text-neutral-400">カラー</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.color }}</dd></div>
+            <div v-if="item.size" class="py-2"><dt class="text-[11px] text-neutral-400">サイズ</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.size }}</dd></div>
+            <div v-if="item.seasons.length" class="py-2"><dt class="text-[11px] text-neutral-400">季節</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.seasons.join('・') }}</dd></div>
+            <div v-if="item.style_tags.length" class="py-2"><dt class="text-[11px] text-neutral-400">スタイル</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.style_tags.join('・') }}</dd></div>
+            <div v-if="item.product_code" class="py-2"><dt class="text-[11px] text-neutral-400">商品番号</dt><dd class="mt-0.5 break-all text-sm font-semibold">{{ item.product_code }}</dd></div>
+            <div v-if="productLink" class="py-2"><dt class="text-[11px] text-neutral-400">商品ページ</dt><dd class="mt-0.5"><a :href="productLink" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-sm font-semibold text-neutral-900 underline underline-offset-4">リンクを開く<AppIcon name="arrow-right" :size="15" /></a></dd></div>
+          </dl>
+        </div>
       </section>
 
       <section v-if="item.memo" class="surface-card mt-4 p-5"><h2 class="text-xs font-semibold text-neutral-400">メモ</h2><p class="mt-3 whitespace-pre-wrap text-sm leading-7 text-neutral-700">{{ item.memo }}</p></section>
