@@ -121,6 +121,7 @@ function normalizeCategory(value: string, name: string): string {
   if (/バッグ|バックパック|リュック|bags?|backpacks?/.test(text)) return 'バッグ'
   if (/帽子|キャップ|ベルト|靴下|ソックス|マフラー|手袋|ネクタイ|サングラス|ストール|アンブレラ|傘|マスク|scarves?|socks?|caps?/.test(text)) return '小物'
   if (/プルパーカ/.test(text)) return 'トップス'
+  if (/ボタンダウン/.test(text) && /シャツ/.test(text) && !/ジャケット|コート|ブルゾン/.test(text)) return 'トップス'
   if (/ワンピース|ドレス|dresses?/.test(text)) return 'ワンピース'
   if (/パンツ|ジーンズ|デニム|スカート|レギンス|ショーツ|リラコ|ステテコ|チノ|タイツ|ボクサーブリーフ|pants?|jeans?|skirts?|leggings?/.test(text)) return 'ボトムス'
   if (/ジャケット|コート|ブルゾン|ダウン|パーカ|jacket|coat|blouson/.test(text)) return 'アウター'

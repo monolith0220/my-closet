@@ -81,3 +81,8 @@ test('ユニクロの実際の商品名と色を分類する', () => {
   ])
   assert.deepEqual(rows.slice(0, 3).map(row => row.color), ['パープル', 'オレンジ', 'ワイン'])
 })
+
+test('ボタンダウンシャツをアウターと誤分類しない', () => {
+  const rows = parseImportTable('商品名,カラー\nスーパーノンアイロンシャツ/ボタンダウン,09 BLACK\n')
+  assert.equal(rows[0].category, 'トップス')
+})
