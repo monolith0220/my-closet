@@ -7,6 +7,8 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
+    "test:import": "node --experimental-strip-types --test tests/import-table.test.mjs",
+    "test:photo": "node --experimental-strip-types --test tests/photo-import.test.mjs",
     "test:db": "supabase test db"
   },
   "dependencies": {

@@ -41,6 +41,17 @@ export async function createClothing(userId: string, input: ClothingInput): Prom
   return data as ClothingItem
 }
 
+export async function createClothingBatch(userId: string, inputs: ClothingInput[]): Promise<ClothingItem[]> {
+  if (inputs.length === 0) throw new Error('登録する商品がありません。')
+  if (inputs.length > 500) throw new Error('一度に登録できるのは500件までです。')
+  const { data, error } = await client()
+    .from('clothing_items')
+    .insert(inputs.map(input => ({ ...input, user_id: userId })))
+    .select('*')
+  if (error) throw error
+  return (data ?? []) as ClothingItem[]
+}
+
 export async function updateClothing(
   id: string,
   userId: string,
@@ -93,9 +104,34 @@ export async function removeClothingImage(path: string): Promise<void> {
   if (error) throw error
 }
 
+export async function updateClothingImage(id: string, userId: string, path: string): Promise<void> {
+  const { data, error } = await client()
+    .from('clothing_items')
+    .update({ image_path: path })
+    .eq('id', id)
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .is('image_path', null)
+    .select('id')
+    .single()
+  if (error) throw error
+  if (!data) throw new Error('洋服が見つからないか、すでに写真があります。')
+}
+
 export async function signedClothingImage(path: string | null): Promise<string | null> {
   if (!path) return null
   const { data, error } = await client().storage.from(bucket).createSignedUrl(path, 60 * 60)
   if (error) throw error
   return data.signedUrl
+}
+
+export async function signedClothingImages(paths: string[]): Promise<Record<string, string>> {
+  if (!paths.length) return {}
+  const { data, error } = await client().storage.from(bucket).createSignedUrls(paths, 60 * 60)
+  if (error) throw error
+  const urls: Record<string, string> = {}
+  for (const entry of data ?? []) {
+    if (entry.path && entry.signedUrl) urls[entry.path] = entry.signedUrl
+  }
+  return urls
 }

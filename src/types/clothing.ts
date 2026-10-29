@@ -21,6 +21,9 @@ export const colors = [
   'レッド',
   'ピンク',
   'イエロー',
+  'オレンジ',
+  'パープル',
+  'ワイン',
   'その他',
 ] as const
 
@@ -57,6 +60,6 @@ export interface ClothingInput {
   product_code: string | null
   product_url: string | null
   image_path: string | null
-  registration_method: 'manual'
+  registration_method: 'manual' | 'uniqlo_history_import'
   memo: string | null
 }

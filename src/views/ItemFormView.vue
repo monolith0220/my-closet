@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
@@ -31,6 +31,50 @@ const form = reactive({
   productCode: '',
   productUrl: '',
   memo: '',
+})
+
+type UniqloUrlDetails = {
+  productCode: string
+  colorCode: string | null
+  sizeCode: string | null
+}
+
+function parseUniqloProductUrl(value: string): UniqloUrlDetails | null {
+  try {
+    const url = new URL(value.trim())
+    if (url.protocol !== 'https:' || !['uniqlo.com', 'www.uniqlo.com'].includes(url.hostname)) return null
+    const productCode = url.pathname.match(/^\/jp\/ja\/products\/E(\d{6})-[A-Z0-9]+\/\d{2}\/?$/i)?.[1]
+    if (!productCode) return null
+    const colorCode = url.searchParams.get('colorDisplayCode')
+    const sizeCode = url.searchParams.get('sizeDisplayCode')
+    return {
+      productCode,
+      colorCode: colorCode && /^\d{2}$/.test(colorCode) ? colorCode : null,
+      sizeCode: sizeCode && /^\d{3}$/.test(sizeCode) ? sizeCode : null,
+    }
+  } catch {
+    return null
+  }
+}
+
+const uniqloUrlDetails = computed(() => parseUniqloProductUrl(form.productUrl))
+const lastAutoProductCode = ref<string | null>(null)
+
+function applyUniqloProductCode() {
+  const details = uniqloUrlDetails.value
+  if (!details) return
+  if (!form.brand.trim()) form.brand = 'UNIQLO'
+  form.productCode = details.productCode
+  lastAutoProductCode.value = details.productCode
+}
+
+watch(() => form.productUrl, () => {
+  const details = uniqloUrlDetails.value
+  if (!details) return
+  if (!form.brand.trim()) form.brand = 'UNIQLO'
+  if (!form.productCode.trim() || form.productCode === lastAutoProductCode.value) {
+    applyUniqloProductCode()
+  }
 })
 
 function returnToPrevious() {
@@ -206,8 +250,14 @@ onUnmounted(revokePreview)
 
       <section class="surface-card space-y-5 p-5">
         <div><p class="eyebrow">PRODUCT DETAILS</p><h2 class="mt-1 text-base font-bold">商品情報</h2></div>
-        <div><label for="item-code" class="field-label">商品番号</label><input id="item-code" v-model="form.productCode" class="field-input" type="text" maxlength="100" placeholder="例：123456" /></div>
         <div><label for="item-url" class="field-label">商品URL</label><input id="item-url" v-model="form.productUrl" class="field-input" type="url" placeholder="https://example.com/item" /></div>
+        <div v-if="uniqloUrlDetails" class="rounded-xl bg-neutral-100 px-4 py-3 text-xs leading-5 text-neutral-600">
+          <p>ユニクロの商品番号 {{ uniqloUrlDetails.productCode }} をURLから読み取りました。</p>
+          <p v-if="uniqloUrlDetails.colorCode || uniqloUrlDetails.sizeCode" class="mt-1">URL内の選択コード：<span v-if="uniqloUrlDetails.colorCode">カラー {{ uniqloUrlDetails.colorCode }}</span><span v-if="uniqloUrlDetails.colorCode && uniqloUrlDetails.sizeCode"> / </span><span v-if="uniqloUrlDetails.sizeCode">サイズ {{ uniqloUrlDetails.sizeCode }}</span></p>
+          <p class="mt-1">商品名・色・購入したサイズは商品ページを確認して入力してください。</p>
+          <button v-if="form.productCode !== uniqloUrlDetails.productCode" type="button" class="mt-2 font-semibold text-neutral-900 underline" @click="applyUniqloProductCode">商品番号を入力する</button>
+        </div>
+        <div><label for="item-code" class="field-label">商品番号</label><input id="item-code" v-model="form.productCode" class="field-input" type="text" maxlength="100" placeholder="例：123456" /></div>
         <div><label for="item-memo" class="field-label">メモ</label><textarea id="item-memo" v-model="form.memo" class="field-input min-h-28 resize-y" maxlength="2000" placeholder="購入日や着こなしのメモなど" /></div>
       </section>
 

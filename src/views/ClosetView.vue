@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
-import { listClothing, signedClothingImage } from '../lib/clothing'
+import { listClothing, signedClothingImages } from '../lib/clothing'
 import type { ClothingItem } from '../types/clothing'
 import { categories, colors } from '../types/clothing'
 
@@ -18,6 +18,8 @@ const category = ref('')
 const brand = ref('')
 const color = ref('')
 const showFilters = ref(false)
+const visibleCount = ref(30)
+const imageRequests = new Set<string>()
 
 const brands = computed(() => [...new Set(items.value.map(item => item.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ja')))
 const activeFilterCount = computed(() => [category.value, brand.value, color.value].filter(Boolean).length)
@@ -31,6 +33,27 @@ const filteredItems = computed(() => {
       (!color.value || item.color === color.value)
   })
 })
+const visibleItems = computed(() => filteredItems.value.slice(0, visibleCount.value))
+
+watch([search, category, brand, color], () => { visibleCount.value = 30 })
+
+watch(visibleItems, async visible => {
+  const pending = visible.filter(item => item.image_path && !imageUrls.value[item.id] && !imageRequests.has(item.id))
+  if (!pending.length) return
+  for (const item of pending) imageRequests.add(item.id)
+  try {
+    const urls = await signedClothingImages(pending.map(item => item.image_path!))
+    const byId: Record<string, string> = {}
+    for (const item of pending) {
+      if (item.image_path && urls[item.image_path]) byId[item.id] = urls[item.image_path]
+    }
+    imageUrls.value = { ...imageUrls.value, ...byId }
+  } catch {
+    // The list remains usable when an image link cannot be signed.
+  } finally {
+    for (const item of pending) imageRequests.delete(item.id)
+  }
+})
 
 async function load() {
   const userId = session.value?.user.id
@@ -39,15 +62,8 @@ async function load() {
   errorMessage.value = ''
   try {
     items.value = await listClothing(userId)
-    const results = await Promise.allSettled(items.value.map(async item => {
-      const url = await signedClothingImage(item.image_path)
-      return [item.id, url] as const
-    }))
-    const urls: Record<string, string> = {}
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value[1]) urls[result.value[0]] = result.value[1]
-    }
-    imageUrls.value = urls
+    imageUrls.value = {}
+    visibleCount.value = 30
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '洋服を読み込めませんでした。'
   } finally {
@@ -87,6 +103,9 @@ onMounted(load)
       </button>
     </div>
 
+    <button type="button" class="text-button mt-4 text-xs" @click="router.push('/closet/import')">ユニクロの購入履歴からまとめて追加 <AppIcon name="arrow-right" :size="16" /></button>
+    <button type="button" class="text-button mt-2 text-xs" @click="router.push('/closet/photos/import')">購入履歴の写真をまとめて追加 <AppIcon name="arrow-right" :size="16" /></button>
+
     <div v-if="showFilters" class="surface-card mt-3 space-y-3 p-4">
       <div class="grid grid-cols-2 gap-3">
         <div><label for="filter-category" class="field-label">カテゴリ</label><select id="filter-category" v-model="category" class="field-select"><option value="">すべて</option><option v-for="choice in categories" :key="choice" :value="choice">{{ choice }}</option></select></div>
@@ -116,7 +135,7 @@ onMounted(load)
       <button v-else type="button" class="primary-button mt-6" @click="router.push('/closet/new')"><AppIcon name="plus" :size="18" />洋服を登録</button>
     </div>
     <div v-else class="grid grid-cols-2 gap-3 sm:gap-4">
-      <RouterLink v-for="item in filteredItems" :key="item.id" :to="`/closet/${item.id}`" class="group min-w-0 overflow-hidden rounded-2xl bg-white shadow-[0_4px_22px_rgba(0,0,0,0.035)] transition hover:-translate-y-0.5 hover:shadow-md">
+      <RouterLink v-for="item in visibleItems" :key="item.id" :to="`/closet/${item.id}`" class="group min-w-0 overflow-hidden rounded-2xl bg-white shadow-[0_4px_22px_rgba(0,0,0,0.035)] transition hover:-translate-y-0.5 hover:shadow-md">
         <div class="relative aspect-[4/5] overflow-hidden bg-[#ecece9]">
           <img v-if="imageUrls[item.id]" :src="imageUrls[item.id]" :alt="item.name" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" loading="lazy" />
           <div v-else class="flex h-full flex-col items-center justify-center gap-2 text-neutral-300"><AppIcon name="shirt" :size="40" /><span class="text-[10px]">NO PHOTO</span></div>
@@ -129,5 +148,6 @@ onMounted(load)
         </div>
       </RouterLink>
     </div>
+    <button v-if="!loading && !errorMessage && visibleCount < filteredItems.length" type="button" class="secondary-button mt-5 w-full" @click="visibleCount += 30">さらに表示（{{ filteredItems.length - visibleCount }} 件）</button>
   </main>
 </template>
