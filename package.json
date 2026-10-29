@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "test:import": "node --experimental-strip-types --test tests/import-table.test.mjs",
     "test:closet": "node --experimental-strip-types --test tests/closet-groups.test.mjs",
+    "test:subcategories": "node --experimental-strip-types --test tests/closet-subcategories.test.mjs",
     "test:photo": "node --experimental-strip-types --test tests/photo-import.test.mjs",
     "test:db": "supabase test db"
   },

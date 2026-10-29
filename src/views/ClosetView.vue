@@ -5,6 +5,7 @@ import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
 import { listClothing, signedClothingImages } from '../lib/clothing'
 import { closetGroupFor, closetGroups, type ClosetGroup } from '../lib/closet-groups'
+import { closetSubcategories, closetSubcategoryFor } from '../lib/closet-subcategories'
 import type { ClothingItem } from '../types/clothing'
 import { colors } from '../types/clothing'
 
@@ -19,6 +20,7 @@ const brand = ref('')
 const color = ref('')
 const showFilters = ref(false)
 const activeGroup = ref<ClosetGroup | null>('アウター')
+const activeSubcategory = ref('すべて')
 const visibleCountByGroup = reactive<Record<ClosetGroup, number>>({
   アウター: 30,
   トップス: 30,
@@ -34,7 +36,7 @@ const activeFilterCount = computed(() => [brand.value, color.value].filter(Boole
 const filteredItems = computed(() => {
   const term = search.value.trim().toLocaleLowerCase()
   return items.value.filter(item => {
-    const searchText = [item.name, item.brand, item.category, closetGroupFor(item), item.color, item.product_code ?? ''].join(' ').toLocaleLowerCase()
+    const searchText = [item.name, item.brand, item.category, closetGroupFor(item), closetSubcategoryFor(item), item.color, item.product_code ?? ''].join(' ').toLocaleLowerCase()
     return (!term || searchText.includes(term)) &&
       (!brand.value || item.brand === brand.value) &&
       (!color.value || item.color === color.value)
@@ -45,16 +47,37 @@ const groupedItems = computed(() => closetGroups.map(name => ({
   items: filteredItems.value.filter(item => closetGroupFor(item) === name),
 })))
 const activeGroupItems = computed(() => groupedItems.value.find(group => group.name === activeGroup.value)?.items ?? [])
-const visibleItems = computed(() => activeGroup.value ? activeGroupItems.value.slice(0, visibleCountByGroup[activeGroup.value]) : [])
+const subcategoryOptions = computed(() => activeGroup.value ? [
+  { name: 'すべて', count: activeGroupItems.value.length },
+  ...closetSubcategories[activeGroup.value].map(name => ({
+    name,
+    count: activeGroupItems.value.filter(item => closetSubcategoryFor(item, activeGroup.value!) === name).length,
+  })),
+] : [])
+const activeSubcategoryItems = computed(() => activeSubcategory.value === 'すべて'
+  ? activeGroupItems.value
+  : activeGroupItems.value.filter(item => closetSubcategoryFor(item, activeGroup.value!) === activeSubcategory.value))
+const visibleItems = computed(() => activeGroup.value ? activeSubcategoryItems.value.slice(0, visibleCountByGroup[activeGroup.value]) : [])
 
 watch([search, brand, color], () => {
   for (const group of closetGroups) visibleCountByGroup[group] = 30
-  if (activeGroup.value && activeGroupItems.value.length) return
-  activeGroup.value = groupedItems.value.find(group => group.items.length)?.name ?? null
+  if (!activeGroup.value || !activeGroupItems.value.length) {
+    activeGroup.value = groupedItems.value.find(group => group.items.length)?.name ?? null
+    activeSubcategory.value = 'すべて'
+  } else if (!activeSubcategoryItems.value.length) {
+    activeSubcategory.value = 'すべて'
+  }
 })
 
 function toggleGroup(group: ClosetGroup) {
   activeGroup.value = activeGroup.value === group ? null : group
+  activeSubcategory.value = 'すべて'
+  visibleCountByGroup[group] = 30
+}
+
+function toggleSubcategory(name: string) {
+  activeSubcategory.value = activeSubcategory.value === name ? 'すべて' : name
+  if (activeGroup.value) visibleCountByGroup[activeGroup.value] = 30
 }
 
 function showMoreActiveGroup() {
@@ -91,6 +114,7 @@ async function load() {
     if (!activeGroup.value || !activeGroupItems.value.length) {
       activeGroup.value = groupedItems.value.find(group => group.items.length)?.name ?? null
     }
+    activeSubcategory.value = 'すべて'
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '洋服を読み込めませんでした。'
   } finally {
@@ -160,21 +184,28 @@ onMounted(load)
       <button v-else type="button" class="primary-button mt-6" @click="router.push('/closet/new')"><AppIcon name="plus" :size="18" />洋服を登録</button>
     </div>
     <div v-else>
-      <div role="group" aria-label="カテゴリを切り替える" class="grid grid-cols-2 gap-2">
+      <h3 class="mb-2 text-xs font-semibold text-neutral-500">大分類</h3>
+      <div role="group" aria-label="大分類を切り替える" class="grid grid-cols-2 gap-2">
         <button v-for="group in groupedItems" :key="group.name" type="button" class="surface-card min-h-16 px-4 py-3 text-left transition-colors" :class="activeGroup === group.name ? 'bg-neutral-950 text-white' : 'text-neutral-900 hover:bg-neutral-100'" :aria-pressed="activeGroup === group.name" @click="toggleGroup(group.name)">
           <span class="block text-sm font-bold">{{ group.name }}</span>
           <span class="mt-1 block text-xs" :class="activeGroup === group.name ? 'text-neutral-300' : 'text-neutral-500'">{{ group.items.length }} 着</span>
         </button>
       </div>
       <div v-if="activeGroup" class="mt-5">
-        <div class="mb-3 flex items-center justify-between"><h3 class="text-sm font-bold">{{ activeGroup }}</h3><span class="text-xs text-neutral-500">{{ activeGroupItems.length }} 着</span></div>
-        <p v-if="activeGroupItems.length === 0" class="surface-card px-5 py-8 text-center text-xs text-neutral-500">このカテゴリのアイテムはまだありません。</p>
+        <h3 class="mb-2 text-xs font-semibold text-neutral-500">小分類</h3>
+        <div role="group" :aria-label="`${activeGroup}の小分類を切り替える`" class="flex flex-wrap gap-2">
+          <button v-for="option in subcategoryOptions" :key="option.name" type="button" class="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors" :class="activeSubcategory === option.name ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400'" :aria-pressed="activeSubcategory === option.name" @click="toggleSubcategory(option.name)">
+            <span>{{ option.name }}</span><span class="opacity-65">{{ option.count }}</span>
+          </button>
+        </div>
+        <div class="mb-3 mt-6 flex items-center justify-between"><h3 class="text-sm font-bold">{{ activeSubcategory === 'すべて' ? activeGroup : `${activeGroup} / ${activeSubcategory}` }}</h3><span class="text-xs text-neutral-500">{{ activeSubcategoryItems.length }} 着</span></div>
+        <p v-if="activeSubcategoryItems.length === 0" class="surface-card px-5 py-8 text-center text-xs text-neutral-500">この小分類のアイテムはまだありません。</p>
         <div v-else class="grid grid-cols-2 gap-3 sm:gap-4">
           <RouterLink v-for="item in visibleItems" :key="item.id" :to="`/closet/${item.id}`" class="group min-w-0 overflow-hidden rounded-2xl bg-white shadow-[0_4px_22px_rgba(0,0,0,0.035)] transition hover:-translate-y-0.5 hover:shadow-md">
             <div class="relative aspect-[4/5] overflow-hidden bg-[#ecece9]">
               <img v-if="imageUrls[item.id]" :src="imageUrls[item.id]" :alt="item.name" class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" loading="lazy" />
               <div v-else class="flex h-full flex-col items-center justify-center gap-2 text-neutral-300"><AppIcon name="shirt" :size="40" /><span class="text-[10px]">NO PHOTO</span></div>
-              <span class="absolute bottom-2 left-2 max-w-[calc(100%-16px)] truncate rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-neutral-700 backdrop-blur">{{ activeGroup }}</span>
+              <span class="absolute bottom-2 left-2 max-w-[calc(100%-16px)] truncate rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-neutral-700 backdrop-blur">{{ closetSubcategoryFor(item) }}</span>
             </div>
             <div class="min-w-0 px-3 pb-4 pt-3">
               <p class="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-neutral-400">{{ item.brand }}</p>
@@ -183,7 +214,7 @@ onMounted(load)
             </div>
           </RouterLink>
         </div>
-        <button v-if="visibleItems.length < activeGroupItems.length" type="button" class="secondary-button mt-4 w-full" @click="showMoreActiveGroup">さらに表示（{{ activeGroupItems.length - visibleItems.length }} 件）</button>
+        <button v-if="visibleItems.length < activeSubcategoryItems.length" type="button" class="secondary-button mt-4 w-full" @click="showMoreActiveGroup">さらに表示（{{ activeSubcategoryItems.length - visibleItems.length }} 件）</button>
       </div>
       <p v-else class="mt-5 text-center text-xs text-neutral-500">カテゴリを選ぶとアイテムが表示されます。</p>
     </div>
