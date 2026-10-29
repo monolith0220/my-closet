@@ -2,7 +2,7 @@
 -- Seed rows as the test runner's privileged role, then exercise the actual client roles.
 begin;
 
-select plan(34);
+select plan(38);
 
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'closet-owner@example.test'),
@@ -58,6 +58,20 @@ select results_eq(
   $$update public.clothing_items set name = 'Edited shirt' where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1' returning name$$,
   array['Edited shirt'], 'owner can edit their clothing'
 );
+select is(
+  (select is_favorite from public.clothing_items where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'),
+  false, 'new clothing is not favorite by default'
+);
+select results_eq(
+  $$update public.clothing_items set is_favorite = true, purchased_at = '2026-05-22'
+    where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1' returning purchased_at::text$$,
+  array['2026-05-22'], 'owner can save favorite and purchase date'
+);
+select is_empty(
+  $$update public.clothing_items set is_favorite = true
+    where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1' returning id$$,
+  'owner cannot favorite another user clothing'
+);
 select throws_ok(
   $$update public.clothing_items set user_id = '22222222-2222-2222-2222-222222222222'
     where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'$$,
@@ -90,6 +104,11 @@ select results_eq(
     values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'top')
     returning role$$,
   array['top'], 'owner can link their own clothing to their own outfit'
+);
+select throws_ok(
+  $$insert into public.outfit_items (outfit_id, clothing_item_id, role)
+    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'top')$$,
+  '23505', null, 'a saved pair cannot have two tops'
 );
 select throws_ok(
   $$insert into public.outfit_items (outfit_id, clothing_item_id, user_id)

@@ -45,6 +45,8 @@ export interface ClothingItem {
   image_path: string | null
   registration_method: string
   memo: string | null
+  is_favorite: boolean
+  purchased_at: string | null
   is_active: boolean
   created_at: string
 }
@@ -62,4 +64,5 @@ export interface ClothingInput {
   image_path: string | null
   registration_method: 'manual' | 'uniqlo_history_import'
   memo: string | null
+  purchased_at?: string | null
 }

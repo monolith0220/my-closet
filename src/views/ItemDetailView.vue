@@ -3,7 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
-import { deleteClothing, getClothing, signedClothingImage } from '../lib/clothing'
+import { deleteClothing, getClothing, setClothingFavorite, signedClothingImage } from '../lib/clothing'
+import { formatClothingSize, purchaseDateFor, stripPurchaseDateFromMemo } from '../lib/clothing-display'
 import type { ClothingItem } from '../types/clothing'
 
 const route = useRoute()
@@ -13,8 +14,11 @@ const item = ref<ClothingItem | null>(null)
 const imageUrl = ref<string | null>(null)
 const loading = ref(true)
 const deleting = ref(false)
+const favoriteBusy = ref(false)
 const errorMessage = ref('')
 const itemId = computed(() => String(route.params.id ?? ''))
+const purchaseDate = computed(() => item.value ? purchaseDateFor(item.value)?.replaceAll('-', '/') ?? null : null)
+const visibleMemo = computed(() => stripPurchaseDateFromMemo(item.value?.memo ?? null) || null)
 const productLink = computed(() => {
   const raw = item.value?.product_url
   if (!raw) return null
@@ -57,6 +61,21 @@ async function remove() {
   }
 }
 
+async function toggleFavorite() {
+  const userId = session.value?.user.id
+  if (!userId || !item.value || favoriteBusy.value) return
+  favoriteBusy.value = true
+  errorMessage.value = ''
+  try {
+    await setClothingFavorite(item.value.id, userId, !item.value.is_favorite)
+    item.value.is_favorite = !item.value.is_favorite
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'お気に入りを保存できませんでした。'
+  } finally {
+    favoriteBusy.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -65,7 +84,8 @@ onMounted(load)
     <header class="mb-5 flex items-center justify-between">
       <button type="button" class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-800" aria-label="一覧に戻る" @click="router.push('/closet')"><AppIcon name="arrow-left" :size="20" /></button>
       <p class="eyebrow">ITEM DETAILS</p>
-      <div class="w-10" />
+      <button v-if="item" type="button" class="flex h-10 w-10 items-center justify-center rounded-full bg-white" :class="item.is_favorite ? 'text-rose-600' : 'text-neutral-500'" :aria-label="item.is_favorite ? 'お気に入りから外す' : 'お気に入りに追加する'" :aria-pressed="item.is_favorite" :disabled="favoriteBusy" @click="toggleFavorite"><AppIcon name="heart" :size="20" :filled="item.is_favorite" /></button>
+      <div v-else class="w-10" />
     </header>
 
     <div v-if="loading" class="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4 sm:grid-cols-[136px_minmax(0,1fr)]" aria-label="読み込み中">
@@ -85,16 +105,16 @@ onMounted(load)
           <dl class="mt-4 divide-y divide-neutral-200">
             <div class="py-2"><dt class="text-[11px] text-neutral-400">カテゴリ</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.category }}</dd></div>
             <div class="py-2"><dt class="text-[11px] text-neutral-400">カラー</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.color }}</dd></div>
-            <div v-if="item.size" class="py-2"><dt class="text-[11px] text-neutral-400">サイズ</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.size }}</dd></div>
+            <div v-if="item.size" class="py-2"><dt class="text-[11px] text-neutral-400">サイズ</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ formatClothingSize(item.size) }}</dd></div>
+            <div v-if="purchaseDate" class="py-2"><dt class="text-[11px] text-neutral-400">購入日</dt><dd class="mt-0.5 text-sm font-semibold">{{ purchaseDate }}</dd></div>
             <div v-if="item.seasons.length" class="py-2"><dt class="text-[11px] text-neutral-400">季節</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.seasons.join('・') }}</dd></div>
             <div v-if="item.style_tags.length" class="py-2"><dt class="text-[11px] text-neutral-400">スタイル</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.style_tags.join('・') }}</dd></div>
-            <div v-if="item.product_code" class="py-2"><dt class="text-[11px] text-neutral-400">商品番号</dt><dd class="mt-0.5 break-all text-sm font-semibold">{{ item.product_code }}</dd></div>
             <div v-if="productLink" class="py-2"><dt class="text-[11px] text-neutral-400">商品ページ</dt><dd class="mt-0.5"><a :href="productLink" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-sm font-semibold text-neutral-900 underline underline-offset-4">リンクを開く<AppIcon name="arrow-right" :size="15" /></a></dd></div>
           </dl>
         </div>
       </section>
 
-      <section v-if="item.memo" class="surface-card mt-4 p-5"><h2 class="text-xs font-semibold text-neutral-400">メモ</h2><p class="mt-3 whitespace-pre-wrap text-sm leading-7 text-neutral-700">{{ item.memo }}</p></section>
+      <section v-if="visibleMemo" class="surface-card mt-4 p-5"><h2 class="text-xs font-semibold text-neutral-400">メモ</h2><p class="mt-3 whitespace-pre-wrap text-sm leading-7 text-neutral-700">{{ visibleMemo }}</p></section>
       <p v-if="errorMessage" role="alert" class="mt-5 rounded-xl bg-red-50 px-4 py-3 text-xs text-red-700">{{ errorMessage }}</p>
 
       <div class="mt-8 grid grid-cols-[1fr_auto] gap-3">

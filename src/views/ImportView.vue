@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
 import { createClothingBatch, listClothing } from '../lib/clothing'
+import { formatClothingSize, normalizePurchaseDate } from '../lib/clothing-display'
 import { parseImportTable, type ImportRow } from '../lib/import-table'
 import { categories, colors, type ClothingInput, type ClothingItem } from '../types/clothing'
 
@@ -120,6 +121,7 @@ function rowIssue(row: ImportDraft): string | null {
   if (!row.name.trim()) return '商品名を入力してください。'
   if (!categories.includes(row.category as typeof categories[number])) return 'カテゴリを選択してください。'
   if (!colors.includes(row.color as typeof colors[number])) return 'カラーを選択してください。'
+  if (row.purchasedAt.trim() && !normalizePurchaseDate(row.purchasedAt)) return '購入日を確認してください。'
   if (row.productUrl.trim()) {
     try {
       const url = new URL(row.productUrl.trim())
@@ -197,6 +199,7 @@ function toInput(row: ImportDraft): ClothingInput {
     category: row.category,
     color: row.color,
     size: optional(row.size),
+    purchased_at: row.purchasedAt.trim() ? normalizePurchaseDate(row.purchasedAt) : null,
     seasons: [],
     style_tags: [],
     product_code: optional(row.productCode),
@@ -289,7 +292,7 @@ async function save() {
             <input v-model="row.selected" type="checkbox" :aria-label="`${row.name || row.sourceIndex + '行目'}を追加`" class="mt-1.5 h-5 w-5 shrink-0 accent-neutral-900" />
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-semibold">{{ row.name || '商品名なし' }}</p>
-              <p class="mt-1 text-[11px] text-neutral-500">{{ row.productCode || '商品番号なし' }} · {{ row.originalColor || row.color }}<span v-if="row.size"> · {{ row.size }}</span><span v-if="row.purchasedAt"> · {{ row.purchasedAt }}</span></p>
+              <p class="mt-1 text-[11px] text-neutral-500">{{ row.productCode || '商品番号なし' }} · {{ row.originalColor || row.color }}<span v-if="row.size"> · {{ formatClothingSize(row.size) }}</span><span v-if="row.purchasedAt"> · {{ row.purchasedAt }}</span></p>
               <p v-if="duplicateStatus(row).source === 'closet'" class="mt-1 text-[11px] font-semibold text-amber-700">クローゼットに同じ商品が登録済みの可能性があります</p>
               <p v-else-if="duplicateStatus(row).source === 'same-row'" class="mt-1 text-[11px] font-semibold text-amber-700">この表に完全に同じ行があります</p>
               <p v-if="duplicateStatus(row).repeatedProduct && duplicateStatus(row).source !== 'same-row'" class="mt-1 text-[11px] font-semibold text-amber-700">同じ商品番号・カラー・サイズの候補があります。購入日を確認してください</p>

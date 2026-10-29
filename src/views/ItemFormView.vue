@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
 import { createClothing, getClothing, removeClothingImage, signedClothingImage, updateClothing, uploadClothingImage } from '../lib/clothing'
+import { formatClothingSize, normalizePurchaseDate, purchaseDateFor, stripPurchaseDateFromMemo } from '../lib/clothing-display'
 import { categories, colors, seasons, type ClothingInput, type ClothingItem, type Season } from '../types/clothing'
 
 const route = useRoute()
@@ -26,6 +27,7 @@ const form = reactive({
   category: '',
   color: '',
   size: '',
+  purchaseDate: '',
   seasons: [] as Season[],
   styleTags: '',
   productCode: '',
@@ -126,19 +128,22 @@ function optional(value: string): string | null {
 }
 
 function inputPayload(imagePath: string | null): ClothingInput {
+  const displaySize = optional(formatClothingSize(form.size))
+  const originalSize = currentItem.value?.size ?? null
   return {
     name: form.name.trim(),
     brand: form.brand.trim(),
     category: form.category,
     color: form.color,
-    size: optional(form.size),
+    size: originalSize && displaySize === formatClothingSize(originalSize) ? originalSize : displaySize,
+    purchased_at: form.purchaseDate ? normalizePurchaseDate(form.purchaseDate) : null,
     seasons: [...form.seasons],
     style_tags: [...new Set(form.styleTags.split(',').map(tag => tag.trim()).filter(Boolean))],
     product_code: optional(form.productCode),
     product_url: optional(form.productUrl),
     image_path: imagePath,
     registration_method: 'manual',
-    memo: optional(form.memo),
+    memo: optional(stripPurchaseDateFromMemo(form.memo)),
   }
 }
 
@@ -148,6 +153,10 @@ async function save() {
   errorMessage.value = ''
   if (!form.name.trim() || !form.brand.trim() || !form.category || !form.color) {
     errorMessage.value = '必須項目を入力してください。'
+    return
+  }
+  if (form.purchaseDate && !normalizePurchaseDate(form.purchaseDate)) {
+    errorMessage.value = '購入日を確認してください。'
     return
   }
   if (form.productUrl.trim()) {
@@ -195,12 +204,13 @@ onMounted(async () => {
     form.brand = item.brand
     form.category = item.category
     form.color = item.color
-    form.size = item.size ?? ''
+    form.size = formatClothingSize(item.size)
+    form.purchaseDate = item.purchased_at ?? purchaseDateFor(item) ?? ''
     form.seasons = item.seasons.filter((season): season is Season => seasons.includes(season as Season))
     form.styleTags = item.style_tags.join(', ')
     form.productCode = item.product_code ?? ''
     form.productUrl = item.product_url ?? ''
-    form.memo = item.memo ?? ''
+    form.memo = stripPurchaseDateFromMemo(item.memo)
     if (item.image_path) {
       try { imagePreview.value = await signedClothingImage(item.image_path) } catch { /* Show placeholder if image is unavailable. */ }
     }
@@ -221,18 +231,21 @@ onUnmounted(revokePreview)
       <div><p class="eyebrow">MY WARDROBE</p><h1 class="mt-1 text-[24px] font-bold tracking-tight">{{ isEditing ? '洋服を編集' : '洋服を登録' }}</h1></div>
     </header>
 
-    <div v-if="loading" class="space-y-4" aria-label="読み込み中"><div class="aspect-[4/3] animate-pulse rounded-2xl bg-neutral-200" /><div v-for="i in 4" :key="i" class="h-14 animate-pulse rounded-xl bg-neutral-200" /></div>
+    <div v-if="loading" class="space-y-4" aria-label="読み込み中"><div class="h-52 animate-pulse rounded-2xl bg-neutral-200" /><div v-for="i in 4" :key="i" class="h-14 animate-pulse rounded-xl bg-neutral-200" /></div>
     <div v-else-if="isEditing && !currentItem" class="surface-card p-6 text-center"><p role="alert" class="text-sm text-red-700">{{ errorMessage }}</p><button type="button" class="secondary-button mt-5" @click="router.push('/closet')">一覧に戻る</button></div>
     <form v-else class="space-y-7" @submit.prevent="save">
       <section>
         <label for="item-photo" class="field-label">写真</label>
-        <div class="relative overflow-hidden rounded-2xl border border-dashed border-neutral-300 bg-[#efefec]">
-          <img v-if="imagePreview" :src="imagePreview" alt="選択した洋服の写真" class="aspect-[4/3] w-full object-cover" />
-          <div v-else class="flex aspect-[4/3] flex-col items-center justify-center gap-3 text-neutral-400"><AppIcon name="camera" :size="34" /><span class="text-xs">写真を追加</span></div>
-          <label for="item-photo" class="absolute bottom-3 right-3 flex cursor-pointer items-center gap-2 rounded-full bg-white px-4 py-2.5 text-xs font-semibold text-neutral-900 shadow-sm"><AppIcon name="camera" :size="16" />写真を選ぶ</label>
-          <input id="item-photo" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" @change="selectPhoto" />
+        <div class="overflow-hidden rounded-2xl border border-dashed border-neutral-300 bg-[#efefec]">
+          <img v-if="imagePreview" :src="imagePreview" alt="選択した洋服の写真" class="h-52 w-full object-contain p-2 sm:h-64" />
+          <div v-else class="flex h-52 flex-col items-center justify-center gap-3 text-neutral-400 sm:h-64"><AppIcon name="camera" :size="34" /><span class="text-xs">写真を追加</span></div>
         </div>
-        <div class="mt-2 flex items-center justify-between gap-3"><p class="text-[11px] text-neutral-400">JPEG・PNG・WebP / 最大10MB</p><button v-if="imagePreview" type="button" class="text-xs font-semibold text-neutral-500 underline" @click="clearPhoto">写真を削除</button></div>
+        <div class="mt-3 flex flex-wrap items-center gap-3">
+          <label for="item-photo" class="secondary-button min-h-10 cursor-pointer px-3 text-xs"><AppIcon name="camera" :size="16" />写真を選ぶ</label>
+          <input id="item-photo" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" @change="selectPhoto" />
+          <button v-if="imagePreview" type="button" class="text-xs font-semibold text-neutral-500 underline" @click="clearPhoto">写真を削除</button>
+          <p class="w-full text-[11px] text-neutral-400">JPEG・PNG・WebP / 最大10MB</p>
+        </div>
       </section>
 
       <section class="surface-card space-y-5 p-5">
@@ -244,6 +257,7 @@ onUnmounted(revokePreview)
           <div><label for="item-color" class="field-label">カラー <span class="text-red-500">*</span></label><select id="item-color" v-model="form.color" class="field-select" required><option value="" disabled>選択</option><option v-for="choice in colors" :key="choice" :value="choice">{{ choice }}</option></select></div>
         </div>
         <div><label for="item-size" class="field-label">サイズ</label><input id="item-size" v-model="form.size" class="field-input" type="text" maxlength="30" placeholder="例：M / 26.5cm" /></div>
+        <div><label for="item-purchase-date" class="field-label">購入日</label><input id="item-purchase-date" v-model="form.purchaseDate" class="field-input" type="date" /></div>
         <div><span class="field-label">季節</span><div class="grid grid-cols-4 gap-2"><button v-for="season in seasons" :key="season" type="button" class="min-h-11 rounded-xl border text-sm font-semibold transition" :class="form.seasons.includes(season) ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-200 bg-white text-neutral-600'" :aria-pressed="form.seasons.includes(season)" @click="toggleSeason(season)">{{ season }}</button></div></div>
         <div><label for="item-tags" class="field-label">スタイルタグ</label><input id="item-tags" v-model="form.styleTags" class="field-input" type="text" placeholder="例：カジュアル, きれいめ" /><p class="mt-1.5 text-[11px] text-neutral-400">カンマで区切って入力</p></div>
       </section>

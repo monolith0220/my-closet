@@ -5,6 +5,8 @@ import AppIcon from './AppIcon.vue'
 const route = useRoute()
 const entries = [
   { to: '/closet', label: 'クローゼット', icon: 'hanger' },
+  { to: '/search', label: '検索', icon: 'search' },
+  { to: '/outfits', label: 'コーデ', icon: 'shirt' },
   { to: '/ai', label: 'AIコーデ', icon: 'sparkles' },
   { to: '/settings', label: '設定', icon: 'settings' },
 ] as const
@@ -12,7 +14,7 @@ const entries = [
 
 <template>
   <nav class="bottom-nav" aria-label="メインメニュー">
-    <div class="mx-auto grid max-w-[560px] grid-cols-3">
+    <div class="mx-auto grid max-w-[560px] grid-cols-5">
       <RouterLink
         v-for="entry in entries"
         :key="entry.to"
