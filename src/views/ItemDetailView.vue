@@ -53,7 +53,7 @@ async function remove() {
   errorMessage.value = ''
   try {
     await deleteClothing(item.value.id, userId)
-    await router.replace('/closet')
+    await router.replace({ path: '/closet', query: route.query })
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '削除に失敗しました。'
   } finally {
@@ -82,7 +82,7 @@ onMounted(load)
 <template>
   <main class="page-shell">
     <header class="mb-5 flex items-center justify-between">
-      <button type="button" class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-800" aria-label="一覧に戻る" @click="router.push('/closet')"><AppIcon name="arrow-left" :size="20" /></button>
+      <button type="button" class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-800" aria-label="一覧に戻る" @click="router.push({ path: '/closet', query: route.query })"><AppIcon name="arrow-left" :size="20" /></button>
       <p class="eyebrow">ITEM DETAILS</p>
       <button v-if="item" type="button" class="flex h-10 w-10 items-center justify-center rounded-full bg-white" :class="item.is_favorite ? 'text-rose-600' : 'text-neutral-500'" :aria-label="item.is_favorite ? 'お気に入りから外す' : 'お気に入りに追加する'" :aria-pressed="item.is_favorite" :disabled="favoriteBusy" @click="toggleFavorite"><AppIcon name="heart" :size="20" :filled="item.is_favorite" /></button>
       <div v-else class="w-10" />
@@ -92,7 +92,7 @@ onMounted(load)
       <div class="aspect-[4/5] animate-pulse rounded-2xl bg-neutral-200" />
       <div class="space-y-4 pt-1"><div class="h-3 w-1/3 animate-pulse rounded bg-neutral-200" /><div class="h-6 w-full animate-pulse rounded bg-neutral-200" /><div v-for="i in 4" :key="i" class="h-8 animate-pulse rounded bg-neutral-100" /></div>
     </div>
-    <div v-else-if="!item" class="surface-card px-6 py-10 text-center"><p role="alert" class="text-sm text-red-700">{{ errorMessage }}</p><button type="button" class="secondary-button mt-6" @click="router.push('/closet')">一覧に戻る</button></div>
+      <div v-else-if="!item" class="surface-card px-6 py-10 text-center"><p role="alert" class="text-sm text-red-700">{{ errorMessage }}</p><button type="button" class="secondary-button mt-6" @click="router.push({ path: '/closet', query: route.query })">一覧に戻る</button></div>
     <template v-else>
       <section class="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4 sm:grid-cols-[136px_minmax(0,1fr)]" aria-label="アイテムの詳細">
         <div class="aspect-[4/5] overflow-hidden rounded-2xl bg-[#ecece9]">
@@ -118,7 +118,7 @@ onMounted(load)
       <p v-if="errorMessage" role="alert" class="mt-5 rounded-xl bg-red-50 px-4 py-3 text-xs text-red-700">{{ errorMessage }}</p>
 
       <div class="mt-8 grid grid-cols-[1fr_auto] gap-3">
-        <button type="button" class="primary-button" @click="router.push(`/closet/${item.id}/edit`)"><AppIcon name="edit" :size="18" />編集する</button>
+        <button type="button" class="primary-button" @click="router.push({ path: `/closet/${item.id}/edit`, query: route.query })"><AppIcon name="edit" :size="18" />編集する</button>
         <button type="button" class="secondary-button px-4 text-red-600" :disabled="deleting" aria-label="洋服を削除" @click="remove"><AppIcon name="trash" :size="19" /></button>
       </div>
     </template>

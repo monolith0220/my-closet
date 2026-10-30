@@ -80,7 +80,7 @@ watch(() => form.productUrl, () => {
 })
 
 function returnToPrevious() {
-  router.push(itemId.value ? `/closet/${itemId.value}` : '/closet')
+  router.push({ path: itemId.value ? `/closet/${itemId.value}` : '/closet', query: route.query })
 }
 
 function revokePreview() {
@@ -183,7 +183,7 @@ async function save() {
     if (priorPath && priorPath !== nextPath) {
       try { await removeClothingImage(priorPath) } catch { /* Item save succeeded; unused image can be cleaned up later. */ }
     }
-    await router.replace(`/closet/${saved.id}`)
+    await router.replace({ path: `/closet/${saved.id}`, query: route.query })
   } catch (error) {
     if (uploadedPath) {
       try { await removeClothingImage(uploadedPath) } catch { /* Avoid hiding the original error. */ }
