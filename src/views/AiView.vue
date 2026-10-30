@@ -73,7 +73,7 @@ onMounted(load)
 </script>
 
 <template>
-  <main class="page-shell">
+  <main class="page-shell page-shell--compact">
     <h1 class="sr-only">コーデ提案</h1>
     <p class="text-xs leading-6 text-neutral-500">閲覧回数が少ない服を優先して、上下を組み合わせます。</p>
 

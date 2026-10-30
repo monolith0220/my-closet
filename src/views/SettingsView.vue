@@ -24,7 +24,7 @@ async function signOut() {
 </script>
 
 <template>
-  <main class="page-shell">
+  <main class="page-shell page-shell--compact">
     <h1 class="sr-only">設定</h1>
     <section class="surface-card p-5">
       <p class="eyebrow">ACCOUNT</p>

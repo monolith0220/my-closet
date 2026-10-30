@@ -22,7 +22,6 @@ const selectionMode = ref(false)
 const selectedIds = ref<Set<string>>(new Set())
 const deletingSelected = ref(false)
 const selectionError = ref('')
-const selectionNotice = ref('')
 const visibleCount = ref(32)
 const loadMoreAnchor = ref<HTMLElement | null>(null)
 let loadObserver: IntersectionObserver | null = null
@@ -48,13 +47,12 @@ function cancelSelection() {
   selectionError.value = ''
 }
 
-function startSelection(id?: string) {
+function startSelection(id: string) {
   if (deletingSelected.value) return
   selectionMode.value = true
   addMenuOpen.value = false
-  selectedIds.value = id ? new Set([id]) : new Set()
+  selectedIds.value = new Set([id])
   selectionError.value = ''
-  selectionNotice.value = ''
 }
 
 function beginPress(event: PointerEvent, id: string) {
@@ -110,7 +108,6 @@ async function removeSelected() {
 
   deletingSelected.value = true
   selectionError.value = ''
-  selectionNotice.value = ''
   const succeeded: string[] = []
   const failed: string[] = []
   for (const id of ids) {
@@ -124,7 +121,6 @@ async function removeSelected() {
   if (succeeded.length) {
     const removed = new Set(succeeded)
     items.value = items.value.filter(item => !removed.has(item.id))
-    selectionNotice.value = `${succeeded.length}着を削除しました。`
   }
   if (failed.length) {
     selectedIds.value = new Set(failed)
@@ -236,8 +232,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="page-shell" :inert="searchOpen">
-    <header class="mb-4 flex justify-end">
+  <main class="page-shell page-shell--compact" :inert="searchOpen" :style="selectionMode ? { paddingBottom: '12rem' } : undefined">
+    <header class="mb-2 flex justify-end">
       <h1 class="sr-only">クローゼット</h1>
       <div class="flex shrink-0 gap-2">
         <button type="button" class="flex h-11 w-11 items-center justify-center rounded-full bg-white text-neutral-800" aria-label="検索を開く" aria-controls="closet-search-dialog" aria-haspopup="dialog" :aria-expanded="searchOpen" @click="openSearch"><AppIcon name="search" :size="20" /></button>
@@ -252,17 +248,6 @@ onUnmounted(() => {
     </div>
 
     <p v-if="hasSearch && !loading" class="mb-4 text-xs text-neutral-500">検索結果 {{ sortedItems.length }} 着</p>
-
-    <div v-if="!loading && !errorMessage && sortedItems.length" class="mb-4">
-      <div v-if="selectionMode" class="flex flex-wrap items-center gap-2 rounded-xl bg-white p-3">
-        <span class="mr-auto text-xs font-semibold">{{ selectedCount }} 着を選択中</span>
-        <button type="button" class="min-h-10 rounded-lg px-3 text-xs font-semibold text-neutral-600" :disabled="deletingSelected" @click="cancelSelection">キャンセル</button>
-        <button type="button" class="inline-flex min-h-10 items-center gap-1 rounded-lg bg-red-600 px-3 text-xs font-semibold text-white disabled:opacity-40" :disabled="!selectedCount || deletingSelected" @click="removeSelected"><AppIcon name="trash" :size="15" />{{ deletingSelected ? '削除中...' : `${selectedCount} 着を削除` }}</button>
-      </div>
-      <button v-else type="button" class="flex min-h-9 items-center gap-1 text-xs font-semibold text-neutral-500" @click="startSelection()"><AppIcon name="check" :size="15" />複数選択</button>
-      <p v-if="selectionError" role="alert" class="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">{{ selectionError }}</p>
-      <p v-if="selectionNotice" role="status" class="mt-2 text-xs text-neutral-600">{{ selectionNotice }}</p>
-    </div>
 
     <div v-if="loading" class="grid grid-cols-4 gap-2" aria-label="洋服を読み込み中">
       <div v-for="i in 8" :key="i" class="overflow-hidden rounded-xl bg-white"><div class="aspect-[4/5] animate-pulse bg-neutral-200" /><div class="h-3 animate-pulse bg-neutral-100" /></div>
@@ -290,5 +275,15 @@ onUnmounted(() => {
       <div v-if="visibleItems.length < sortedItems.length" ref="loadMoreAnchor" class="h-px" aria-hidden="true" />
     </template>
   </main>
+  <div v-if="selectionMode && !searchOpen" class="pointer-events-none fixed inset-x-0 z-20 px-4" style="bottom: calc(76px + env(safe-area-inset-bottom, 0px))">
+    <div class="pointer-events-auto mx-auto max-w-[528px] rounded-2xl border border-neutral-200 bg-white/95 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.16)] backdrop-blur">
+      <p v-if="selectionError" role="alert" class="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{{ selectionError }}</p>
+      <div class="flex items-center gap-2">
+        <span class="mr-auto text-xs font-semibold" aria-live="polite">{{ selectedCount }} 着を選択中</span>
+        <button type="button" class="min-h-10 rounded-lg px-3 text-xs font-semibold text-neutral-600" :disabled="deletingSelected" @click="cancelSelection">キャンセル</button>
+        <button type="button" class="inline-flex min-h-10 items-center gap-1 rounded-lg bg-red-600 px-3 text-xs font-semibold text-white disabled:opacity-40" :disabled="!selectedCount || deletingSelected" @click="removeSelected"><AppIcon name="trash" :size="15" />{{ deletingSelected ? '削除中...' : `${selectedCount} 着を削除` }}</button>
+      </div>
+    </div>
+  </div>
   <SearchView v-if="searchOpen" :items="items" :loading="loading" :error-message="errorMessage" @close="closeSearch" @apply="applySearch" @retry="load" />
 </template>

@@ -147,7 +147,7 @@ onMounted(load)
 </script>
 
 <template>
-  <main class="page-shell">
+  <main class="page-shell page-shell--compact">
     <h1 class="sr-only">上下コーデ</h1>
 
     <div v-if="loading" class="mt-8 space-y-4" aria-label="コーデを読み込み中">
