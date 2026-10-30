@@ -10,7 +10,8 @@
     "test:import": "node --experimental-strip-types --test tests/import-table.test.mjs",
     "test:closet": "node --experimental-strip-types --test tests/closet-groups.test.mjs",
     "test:subcategories": "node --experimental-strip-types --test tests/closet-subcategories.test.mjs",
-    "test:display": "node --experimental-strip-types --test tests/clothing-display.test.mjs tests/sleeve-length.test.mjs tests/closet-search.test.mjs",
+    "test:display": "node --experimental-strip-types --test tests/clothing-display.test.mjs tests/sleeve-length.test.mjs tests/closet-search.test.mjs tests/uniqlo-collection.test.mjs",
+    "test:suggestions": "node --experimental-strip-types --test tests/low-view-outfits.test.mjs",
     "test:photo": "node --experimental-strip-types --test tests/photo-import.test.mjs",
     "test:db": "supabase test db"
   },

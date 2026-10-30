@@ -5,6 +5,7 @@ import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
 import { createClothing, getClothing, removeClothingImage, signedClothingImage, updateClothing, uploadClothingImage } from '../lib/clothing'
 import { formatClothingSize, normalizePurchaseDate, purchaseDateFor, stripPurchaseDateFromMemo } from '../lib/clothing-display'
+import { uniqloCollections, type UniqloCollection } from '../lib/uniqlo-collection'
 import { categories, colors, seasons, type ClothingInput, type ClothingItem, type Season } from '../types/clothing'
 
 const route = useRoute()
@@ -24,6 +25,7 @@ let objectUrl: string | null = null
 const form = reactive({
   name: '',
   brand: '',
+  collection: '' as UniqloCollection | '',
   category: '',
   color: '',
   size: '',
@@ -133,6 +135,7 @@ function inputPayload(imagePath: string | null): ClothingInput {
   return {
     name: form.name.trim(),
     brand: form.brand.trim(),
+    collection: form.collection || null,
     category: form.category,
     color: form.color,
     size: originalSize && displaySize === formatClothingSize(originalSize) ? originalSize : displaySize,
@@ -202,6 +205,7 @@ onMounted(async () => {
     currentItem.value = item
     form.name = item.name
     form.brand = item.brand
+    form.collection = item.collection ?? ''
     form.category = item.category
     form.color = item.color
     form.size = formatClothingSize(item.size)
@@ -252,6 +256,7 @@ onUnmounted(revokePreview)
         <div><p class="eyebrow">BASIC INFORMATION</p><h2 class="mt-1 text-base font-bold">アイテム情報</h2></div>
         <div><label for="item-name" class="field-label">商品名 <span class="text-red-500">*</span></label><input id="item-name" v-model="form.name" class="field-input" type="text" maxlength="120" placeholder="例：オックスフォードシャツ" required /></div>
         <div><label for="item-brand" class="field-label">ブランド <span class="text-red-500">*</span></label><input id="item-brand" v-model="form.brand" class="field-input" type="text" maxlength="80" placeholder="例：UNIQLO" required /></div>
+        <div><label for="item-collection" class="field-label">ユニクロライン</label><select id="item-collection" v-model="form.collection" class="field-select"><option value="">未設定</option><option v-for="choice in uniqloCollections" :key="choice" :value="choice">{{ choice }}</option></select></div>
         <div class="grid grid-cols-2 gap-3">
           <div><label for="item-category" class="field-label">カテゴリ <span class="text-red-500">*</span></label><select id="item-category" v-model="form.category" class="field-select" required><option value="" disabled>選択</option><option v-for="choice in categories" :key="choice" :value="choice">{{ choice }}</option></select></div>
           <div><label for="item-color" class="field-label">カラー <span class="text-red-500">*</span></label><select id="item-color" v-model="form.color" class="field-select" required><option value="" disabled>選択</option><option v-for="choice in colors" :key="choice" :value="choice">{{ choice }}</option></select></div>

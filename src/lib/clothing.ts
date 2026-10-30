@@ -95,6 +95,29 @@ export async function setClothingFavorite(id: string, userId: string, isFavorite
   if (!data) throw new Error('洋服が見つかりません。')
 }
 
+export async function setClothingRating(id: string, userId: string, rating: number): Promise<void> {
+  if (!Number.isInteger(rating) || rating < 0 || rating > 5) {
+    throw new Error('レーティングは0から5の整数で指定してください。')
+  }
+  const { data, error } = await client()
+    .from('clothing_items')
+    .update({ rating })
+    .eq('id', id)
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .select('id')
+    .single()
+  if (error) throw error
+  if (!data) throw new Error('洋服が見つかりません。')
+}
+
+export async function recordClothingView(id: string): Promise<number> {
+  const { data, error } = await client().rpc('increment_clothing_view_count', { p_item_id: id })
+  if (error) throw error
+  if (typeof data !== 'number') throw new Error('洋服が見つかりません。')
+  return data
+}
+
 export async function uploadClothingImage(userId: string, file: File): Promise<string> {
   const supported = ['image/jpeg', 'image/png', 'image/webp']
   if (!supported.includes(file.type)) throw new Error('JPEG、PNG、WebP形式の写真を選択してください。')

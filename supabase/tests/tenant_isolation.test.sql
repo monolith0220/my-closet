@@ -2,7 +2,7 @@
 -- Seed rows as the test runner's privileged role, then exercise the actual client roles.
 begin;
 
-select plan(38);
+select plan(51);
 
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'closet-owner@example.test'),
@@ -29,6 +29,10 @@ set local role anon;
 select throws_ok($$select * from public.clothing_items$$, '42501', null, 'signed-out user cannot read clothing');
 select throws_ok($$select * from public.outfits$$, '42501', null, 'signed-out user cannot read outfits');
 select throws_ok($$select * from public.outfit_items$$, '42501', null, 'signed-out user cannot read outfit items');
+select throws_ok(
+  $$select public.increment_clothing_view_count('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1')$$,
+  '42501', null, 'signed-out user cannot record an item view'
+);
 
 set local role authenticated;
 set local request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
@@ -71,6 +75,56 @@ select is_empty(
   $$update public.clothing_items set is_favorite = true
     where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1' returning id$$,
   'owner cannot favorite another user clothing'
+);
+select is(
+  (select rating::integer from public.clothing_items where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'),
+  0, 'new clothing has no rating by default'
+);
+select is(
+  (select view_count from public.clothing_items where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'),
+  0, 'new clothing starts with zero views'
+);
+select is(
+  (select collection from public.clothing_items where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'),
+  null::text, 'ordinary UNIQLO brand does not imply a special collection'
+);
+select results_eq(
+  $$update public.clothing_items set rating = 5
+    where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1' returning rating::integer$$,
+  array[5], 'owner can rate their clothing'
+);
+select is_empty(
+  $$update public.clothing_items set rating = 5
+    where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1' returning id$$,
+  'owner cannot rate another user clothing'
+);
+select throws_ok(
+  $$update public.clothing_items set rating = 6
+    where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'$$,
+  '23514', null, 'rating cannot exceed five'
+);
+select throws_ok(
+  $$update public.clothing_items set view_count = -1
+    where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'$$,
+  '23514', null, 'view count cannot become negative'
+);
+select results_eq(
+  $$update public.clothing_items set collection = 'UNIQLO U'
+    where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1' returning collection$$,
+  array['UNIQLO U'], 'owner can label an explicit collection'
+);
+select throws_ok(
+  $$update public.clothing_items set collection = 'GU'
+    where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'$$,
+  '23514', null, 'unrecognized collection labels are rejected'
+);
+select results_eq(
+  $$select public.increment_clothing_view_count('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1')$$,
+  array[1], 'opening an owned item increments its view count'
+);
+select throws_ok(
+  $$select public.increment_clothing_view_count('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1')$$,
+  'P0002', null, 'owner cannot increment another user item view count'
 );
 select throws_ok(
   $$update public.clothing_items set user_id = '22222222-2222-2222-2222-222222222222'
@@ -152,6 +206,10 @@ select throws_ok(
 
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select results_eq($$select name from public.clothing_items$$, array['Other jacket'], 'second user reads only their clothing');
+select results_eq(
+  $$select public.increment_clothing_view_count('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1')$$,
+  array[1], 'second user can increment only their own item view count'
+);
 select is_empty(
   $$select * from public.outfits where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'$$,
   'second user cannot read first user outfit'

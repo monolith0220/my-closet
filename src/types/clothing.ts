@@ -35,6 +35,7 @@ export interface ClothingItem {
   user_id: string
   name: string
   brand: string
+  collection: 'UNIQLO U' | 'UNIQLO : C' | null
   category: string
   color: string
   size: string | null
@@ -46,6 +47,8 @@ export interface ClothingItem {
   registration_method: string
   memo: string | null
   is_favorite: boolean
+  rating: number
+  view_count: number
   purchased_at: string | null
   is_active: boolean
   created_at: string
@@ -54,6 +57,7 @@ export interface ClothingItem {
 export interface ClothingInput {
   name: string
   brand: string
+  collection?: 'UNIQLO U' | 'UNIQLO : C' | null
   category: string
   color: string
   size: string | null

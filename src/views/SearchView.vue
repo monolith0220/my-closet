@@ -8,6 +8,7 @@ import { clothingSortOptions, type ClothingSort } from '../lib/clothing-display'
 import { closetGroups, type ClosetGroup } from '../lib/closet-groups'
 import { closetSubcategories } from '../lib/closet-subcategories'
 import { criteriaFromQuery, filterClothingItems, type SleeveFilter } from '../lib/closet-search'
+import { uniqloCollections } from '../lib/uniqlo-collection'
 import { colors, type ClothingItem } from '../types/clothing'
 
 const route = useRoute()
@@ -24,6 +25,7 @@ const subcategory = ref(initial.category && (closetSubcategories[initial.categor
   ? initial.subcategory : '')
 const sleeve = ref<SleeveFilter>(initial.sleeve)
 const brand = ref(initial.brand)
+const collection = ref(initial.collection)
 const color = ref(initial.color)
 const favorites = ref(initial.favorites)
 const sort = ref<ClothingSort>(clothingSortOptions.some(option => option.value === route.query.sort)
@@ -38,6 +40,7 @@ const results = computed(() => filterClothingItems(items.value, {
   subcategory: subcategory.value,
   sleeve: sleeve.value,
   brand: brand.value,
+  collection: collection.value,
   color: color.value,
   favorites: favorites.value,
 }))
@@ -50,6 +53,7 @@ watch(() => route.query, query => {
     ? criteria.subcategory : ''
   sleeve.value = criteria.category === 'トップス' ? criteria.sleeve : 'すべて'
   brand.value = criteria.brand
+  collection.value = criteria.collection
   color.value = criteria.color
   favorites.value = criteria.favorites
   sort.value = clothingSortOptions.some(option => option.value === query.sort)
@@ -67,6 +71,7 @@ function clearFilters() {
   subcategory.value = ''
   sleeve.value = 'すべて'
   brand.value = ''
+  collection.value = ''
   color.value = ''
   favorites.value = false
   sort.value = 'newest'
@@ -80,6 +85,7 @@ function showResults() {
   if (subcategory.value) query.subcategory = subcategory.value
   if (category.value === 'トップス' && sleeve.value !== 'すべて') query.sleeve = sleeve.value
   if (brand.value) query.brand = brand.value
+  if (collection.value) query.collection = collection.value
   if (color.value) query.color = color.value
   if (favorites.value) query.favorites = '1'
   if (sort.value !== 'newest') query.sort = sort.value
@@ -123,6 +129,7 @@ onMounted(load)
         <div><label for="search-brand" class="field-label">ブランド</label><select id="search-brand" v-model="brand" class="field-select"><option value="">すべて</option><option v-for="choice in brands" :key="choice" :value="choice">{{ choice }}</option></select></div>
         <div><label for="search-color" class="field-label">カラー</label><select id="search-color" v-model="color" class="field-select"><option value="">すべて</option><option v-for="choice in colors" :key="choice" :value="choice">{{ choice }}</option></select></div>
       </div>
+      <div class="mt-3"><label for="search-collection" class="field-label">ユニクロライン</label><select id="search-collection" v-model="collection" class="field-select"><option value="">すべて</option><option v-for="choice in uniqloCollections" :key="choice" :value="choice">{{ choice }}</option></select></div>
       <div v-if="category === 'トップス'" class="mt-3"><label for="search-sleeve" class="field-label">袖丈</label><select id="search-sleeve" v-model="sleeve" class="field-select"><option value="すべて">すべて</option><option value="半袖">半袖</option><option value="長袖">長袖</option><option value="不明">不明</option></select></div>
       <label class="mt-4 inline-flex min-h-11 items-center gap-3 text-xs font-semibold text-neutral-700"><input v-model="favorites" type="checkbox" class="h-4 w-4 accent-neutral-950" />お気に入りのみ</label>
       <button type="button" class="text-button mt-2 block text-xs" @click="clearFilters">条件をクリア</button>

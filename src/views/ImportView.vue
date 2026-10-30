@@ -5,6 +5,7 @@ import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
 import { createClothingBatch, listClothing } from '../lib/clothing'
 import { formatClothingSize, normalizePurchaseDate } from '../lib/clothing-display'
+import { detectUniqloCollection } from '../lib/uniqlo-collection'
 import { parseImportTable, type ImportRow } from '../lib/import-table'
 import { categories, colors, type ClothingInput, type ClothingItem } from '../types/clothing'
 
@@ -196,6 +197,7 @@ function toInput(row: ImportDraft): ClothingInput {
   return {
     name: row.name.trim(),
     brand: 'UNIQLO',
+    collection: detectUniqloCollection('UNIQLO', row.name),
     category: row.category,
     color: row.color,
     size: optional(row.size),
