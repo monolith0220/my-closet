@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import SearchView from './SearchView.vue'
 import { useSession } from '../lib/auth-context'
 import { deleteClothing, listClothing, signedClothingImages } from '../lib/clothing'
 import { clothingSortOptions, sortClothing, type ClothingSort } from '../lib/clothing-display'
@@ -31,6 +32,9 @@ let pressStartY = 0
 let suppressedClickId = ''
 
 const selectedCount = computed(() => selectedIds.value.size)
+const searchOpen = computed(() => route.query.search === '1')
+const filterQueryKeys = ['q', 'category', 'subcategory', 'sleeve', 'brand', 'collection', 'color', 'favorites', 'sort'] as const
+const filterQuerySignature = computed(() => JSON.stringify(filterQueryKeys.map(key => route.query[key])))
 
 function clearPressTimer() {
   if (pressTimer) clearTimeout(pressTimer)
@@ -136,10 +140,7 @@ function queryValue(key: string): string {
   return typeof value === 'string' ? value : ''
 }
 
-const hasSearch = computed(() =>
-  ['q', 'category', 'subcategory', 'sleeve', 'brand', 'collection', 'color', 'favorites', 'sort']
-    .some(key => route.query[key] !== undefined),
-)
+const hasSearch = computed(() => filterQueryKeys.some(key => route.query[key] !== undefined))
 
 const filteredItems = computed(() => filterClothingItems(items.value, criteriaFromQuery(route.query)))
 
@@ -152,10 +153,27 @@ const sortedItems = computed(() => {
 })
 const visibleItems = computed(() => sortedItems.value.slice(0, visibleCount.value))
 
-watch(() => route.query, () => {
+watch(filterQuerySignature, () => {
   visibleCount.value = 32
   cancelSelection()
 })
+
+function openSearch() {
+  void router.push({ path: '/closet', query: { ...route.query, search: '1' } })
+}
+
+function closeSearch() {
+  const query = { ...route.query }
+  delete query.search
+  void router.replace({ path: '/closet', query })
+}
+
+function applySearch(query: Record<string, string>) {
+  void router.replace({ path: '/closet', query }).then(async () => {
+    await nextTick()
+    window.scrollTo(0, 0)
+  })
+}
 
 watch(visibleItems, async visible => {
   const pending = visible.filter(item => item.image_path && !imageUrls.value[item.id] && !imageRequests.has(item.id))
@@ -218,14 +236,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="page-shell">
-    <header class="mb-6 flex items-start justify-between gap-4">
-      <div>
-        <p class="eyebrow">MY WARDROBE</p>
-        <h1 class="mt-2 text-[29px] font-bold tracking-tight">クローゼット</h1>
-      </div>
+  <main class="page-shell" :inert="searchOpen">
+    <header class="mb-4 flex justify-end">
+      <h1 class="sr-only">クローゼット</h1>
       <div class="flex shrink-0 gap-2">
-        <button type="button" class="flex h-11 w-11 items-center justify-center rounded-full bg-white text-neutral-800" aria-label="検索画面を開く" @click="router.push({ path: '/search', query: route.query })"><AppIcon name="search" :size="20" /></button>
+        <button type="button" class="flex h-11 w-11 items-center justify-center rounded-full bg-white text-neutral-800" aria-label="検索を開く" aria-controls="closet-search-dialog" aria-haspopup="dialog" :aria-expanded="searchOpen" @click="openSearch"><AppIcon name="search" :size="20" /></button>
         <button type="button" class="flex h-11 w-11 items-center justify-center rounded-full bg-neutral-950 text-white shadow-md shadow-neutral-900/10 transition hover:bg-neutral-700" aria-label="アイテムを追加" aria-controls="closet-add-menu" :aria-expanded="addMenuOpen" @click="addMenuOpen = !addMenuOpen"><AppIcon name="plus" :size="23" /></button>
       </div>
     </header>
@@ -275,4 +290,5 @@ onUnmounted(() => {
       <div v-if="visibleItems.length < sortedItems.length" ref="loadMoreAnchor" class="h-px" aria-hidden="true" />
     </template>
   </main>
+  <SearchView v-if="searchOpen" :items="items" :loading="loading" :error-message="errorMessage" @close="closeSearch" @apply="applySearch" @retry="load" />
 </template>

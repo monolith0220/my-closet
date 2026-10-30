@@ -74,11 +74,8 @@ onMounted(load)
 
 <template>
   <main class="page-shell">
-    <header>
-      <p class="eyebrow">STYLE IDEAS</p>
-      <h1 class="mt-2 text-[29px] font-bold tracking-tight">コーデ提案</h1>
-      <p class="mt-2 text-xs leading-6 text-neutral-500">閲覧回数が少ない服を優先して、上下を組み合わせます。</p>
-    </header>
+    <h1 class="sr-only">コーデ提案</h1>
+    <p class="text-xs leading-6 text-neutral-500">閲覧回数が少ない服を優先して、上下を組み合わせます。</p>
 
     <div v-if="loading" class="mt-8 space-y-4" aria-label="提案を読み込み中">
       <div v-for="index in 2" :key="index" class="h-64 animate-pulse rounded-2xl bg-neutral-200" />

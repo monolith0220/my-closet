@@ -38,7 +38,7 @@ onUnmounted(() => authSubscription?.unsubscribe())
     <AuthView v-else-if="!session" />
     <template v-else>
       <RouterView v-slot="{ Component }">
-        <component :is="Component" :key="route.fullPath" />
+        <component :is="Component" :key="route.path" />
       </RouterView>
       <BottomNav />
     </template>

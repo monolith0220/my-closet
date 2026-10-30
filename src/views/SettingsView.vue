@@ -25,8 +25,8 @@ async function signOut() {
 
 <template>
   <main class="page-shell">
-    <header><p class="eyebrow">YOUR ACCOUNT</p><h1 class="mt-2 text-[29px] font-bold tracking-tight">設定</h1><p class="mt-2 text-xs text-neutral-500">アカウントとアプリについて</p></header>
-    <section class="surface-card mt-8 p-5">
+    <h1 class="sr-only">設定</h1>
+    <section class="surface-card p-5">
       <p class="eyebrow">ACCOUNT</p>
       <h2 class="mt-3 text-base font-bold">ログイン中</h2>
       <p class="mt-1 break-all text-sm text-neutral-600">{{ session?.user.email }}</p>

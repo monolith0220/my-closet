@@ -148,11 +148,7 @@ onMounted(load)
 
 <template>
   <main class="page-shell">
-    <header>
-      <p class="eyebrow">MY OUTFITS</p>
-      <h1 class="mt-2 text-[29px] font-bold tracking-tight">上下コーデ</h1>
-      <p class="mt-2 text-xs text-neutral-500">クローゼットの洋服を組み合わせて保存します。</p>
-    </header>
+    <h1 class="sr-only">上下コーデ</h1>
 
     <div v-if="loading" class="mt-8 space-y-4" aria-label="コーデを読み込み中">
       <div class="h-72 animate-pulse rounded-2xl bg-neutral-200" />
@@ -160,7 +156,7 @@ onMounted(load)
     </div>
     <template v-else>
       <p v-if="errorMessage" role="alert" class="mt-5 rounded-xl bg-red-50 px-4 py-3 text-xs text-red-700">{{ errorMessage }}</p>
-      <section class="surface-card mt-7 p-5">
+      <section class="surface-card p-5">
         <h2 class="text-base font-bold">新しい組み合わせ</h2>
         <p class="mt-1 text-xs leading-5 text-neutral-500">上はトップス・アウター、下はボトムスから選べます。</p>
         <form class="mt-5 space-y-5" @submit.prevent="save">
