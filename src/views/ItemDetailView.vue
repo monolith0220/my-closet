@@ -3,8 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
-import { deleteClothing, getClothing, recordClothingView, setClothingFavorite, setClothingRating, signedClothingImage } from '../lib/clothing'
+import { deleteClothing, getClothing, recordClothingView, setClothingCategory, setClothingFavorite, setClothingRating, signedClothingImage } from '../lib/clothing'
 import { formatClothingSize, purchaseDateFor, stripPurchaseDateFromMemo } from '../lib/clothing-display'
+import { closetGroupFor, closetGroups, type ClosetGroup } from '../lib/closet-groups'
+import { closetSubcategories, closetSubcategoryFor } from '../lib/closet-subcategories'
 import type { ClothingItem } from '../types/clothing'
 
 const route = useRoute()
@@ -16,12 +18,22 @@ const loading = ref(true)
 const deleting = ref(false)
 const favoriteBusy = ref(false)
 const ratingBusy = ref(false)
+const categoryBusy = ref(false)
+const categoryError = ref('')
+const categoryGroup = ref<ClosetGroup>('その他')
+const selectedSubcategory = ref('')
 const errorMessage = ref('')
 const itemId = computed(() => String(route.params.id ?? ''))
 const returnLocation = computed(() => route.query.from === 'ai'
   ? { path: '/ai' }
   : { path: '/closet', query: route.query })
 const ratingOptions = [1, 2, 3, 4, 5] as const
+const subcategoryOptions = computed(() => closetSubcategories[categoryGroup.value])
+const itemCategoryGroup = computed(() => item.value ? closetGroupFor(item.value) : 'その他')
+const itemSubcategory = computed(() => item.value ? closetSubcategoryFor(item.value, itemCategoryGroup.value) : 'その他')
+const categoryChanged = computed(() => Boolean(item.value && (
+  item.value.category_group !== categoryGroup.value || item.value.subcategory !== selectedSubcategory.value
+)))
 const purchaseDate = computed(() => item.value ? purchaseDateFor(item.value)?.replaceAll('-', '/') ?? null : null)
 const visibleMemo = computed(() => stripPurchaseDateFromMemo(item.value?.memo ?? null) || null)
 const productLink = computed(() => {
@@ -40,6 +52,8 @@ async function load() {
   errorMessage.value = ''
   try {
     item.value = await getClothing(itemId.value, userId)
+    categoryGroup.value = closetGroupFor(item.value)
+    selectedSubcategory.value = closetSubcategoryFor(item.value, categoryGroup.value)
     try { item.value.view_count = await recordClothingView(item.value.id) } catch { /* Viewing still works if the private counter is temporarily unavailable. */ }
     if (item.value.image_path) {
       try { imageUrl.value = await signedClothingImage(item.value.image_path) } catch { imageUrl.value = null }
@@ -97,6 +111,31 @@ async function setRating(value: number) {
   }
 }
 
+function changeCategoryGroup() {
+  selectedSubcategory.value = ''
+  categoryError.value = ''
+}
+
+async function saveCategory() {
+  const userId = session.value?.user.id
+  if (!userId || !item.value || categoryBusy.value || !selectedSubcategory.value) return
+  if (!(closetSubcategories[categoryGroup.value] as readonly string[]).includes(selectedSubcategory.value)) {
+    categoryError.value = '大分類に合う小分類を選択してください。'
+    return
+  }
+  categoryBusy.value = true
+  categoryError.value = ''
+  try {
+    await setClothingCategory(item.value.id, userId, categoryGroup.value, selectedSubcategory.value)
+    item.value.category_group = categoryGroup.value
+    item.value.subcategory = selectedSubcategory.value
+  } catch (error) {
+    categoryError.value = error instanceof Error ? error.message : 'カテゴリを保存できませんでした。'
+  } finally {
+    categoryBusy.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -124,7 +163,8 @@ onMounted(load)
           <p class="eyebrow">{{ item.brand }}</p>
           <h1 class="mt-2 break-words text-lg font-bold leading-snug tracking-tight sm:text-xl">{{ item.name }}</h1>
           <dl class="mt-4 divide-y divide-neutral-200">
-            <div class="py-2"><dt class="text-[11px] text-neutral-400">カテゴリ</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.category }}</dd></div>
+            <div class="py-2"><dt class="text-[11px] text-neutral-400">大分類</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ itemCategoryGroup }}</dd></div>
+            <div class="py-2"><dt class="text-[11px] text-neutral-400">小分類</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ itemSubcategory }}</dd></div>
             <div v-if="item.collection" class="py-2"><dt class="text-[11px] text-neutral-400">ユニクロライン</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.collection }}</dd></div>
             <div class="py-2"><dt class="text-[11px] text-neutral-400">カラー</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ item.color }}</dd></div>
             <div v-if="item.size" class="py-2"><dt class="text-[11px] text-neutral-400">サイズ</dt><dd class="mt-0.5 break-words text-sm font-semibold">{{ formatClothingSize(item.size) }}</dd></div>
@@ -134,6 +174,16 @@ onMounted(load)
             <div v-if="productLink" class="py-2"><dt class="text-[11px] text-neutral-400">商品ページ</dt><dd class="mt-0.5"><a :href="productLink" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-sm font-semibold text-neutral-900 underline underline-offset-4">リンクを開く<AppIcon name="arrow-right" :size="15" /></a></dd></div>
           </dl>
         </div>
+      </section>
+
+      <section class="surface-card mt-4 p-4" aria-label="カテゴリ設定">
+        <h2 class="text-sm font-bold">カテゴリ設定</h2>
+        <div class="mt-3 grid grid-cols-2 gap-3">
+          <div><label for="detail-category-group" class="field-label">大分類</label><select id="detail-category-group" v-model="categoryGroup" class="field-select" :disabled="categoryBusy" @change="changeCategoryGroup"><option v-for="choice in closetGroups" :key="choice" :value="choice">{{ choice }}</option></select></div>
+          <div><label for="detail-subcategory" class="field-label">小分類</label><select id="detail-subcategory" v-model="selectedSubcategory" class="field-select" :disabled="categoryBusy"><option value="" disabled>選択</option><option v-for="choice in subcategoryOptions" :key="choice" :value="choice">{{ choice }}</option></select></div>
+        </div>
+        <p v-if="categoryError" role="alert" class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{{ categoryError }}</p>
+        <button type="button" class="secondary-button mt-3 min-h-10 w-full text-xs" :disabled="categoryBusy || !selectedSubcategory || !categoryChanged" @click="saveCategory">{{ categoryBusy ? '保存中...' : 'カテゴリを保存' }}</button>
       </section>
 
       <section class="surface-card mt-4 p-4" aria-label="お気に入り度">

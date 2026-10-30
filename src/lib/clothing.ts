@@ -111,6 +111,24 @@ export async function setClothingRating(id: string, userId: string, rating: numb
   if (!data) throw new Error('洋服が見つかりません。')
 }
 
+export async function setClothingCategory(
+  id: string,
+  userId: string,
+  categoryGroup: string,
+  subcategory: string,
+): Promise<void> {
+  const { data, error } = await client()
+    .from('clothing_items')
+    .update({ category_group: categoryGroup, subcategory })
+    .eq('id', id)
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .select('id')
+    .single()
+  if (error) throw error
+  if (!data) throw new Error('洋服が見つかりません。')
+}
+
 export async function recordClothingView(id: string): Promise<number> {
   const { data, error } = await client().rpc('increment_clothing_view_count', { p_item_id: id })
   if (error) throw error

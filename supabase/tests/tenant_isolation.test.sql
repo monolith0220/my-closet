@@ -2,7 +2,7 @@
 -- Seed rows as the test runner's privileged role, then exercise the actual client roles.
 begin;
 
-select plan(51);
+select plan(55);
 
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'closet-owner@example.test'),
@@ -117,6 +117,27 @@ select throws_ok(
   $$update public.clothing_items set collection = 'GU'
     where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'$$,
   '23514', null, 'unrecognized collection labels are rejected'
+);
+select results_eq(
+  $$update public.clothing_items set category_group = 'トップス', subcategory = 'Tシャツ'
+    where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'
+    returning category_group || '/' || subcategory$$,
+  array['トップス/Tシャツ'], 'owner can set an explicit category pair'
+);
+select throws_ok(
+  $$update public.clothing_items set category_group = 'トップス', subcategory = 'パンツ'
+    where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'$$,
+  '23514', null, 'mismatched category pairs are rejected'
+);
+select throws_ok(
+  $$update public.clothing_items set category_group = 'トップス', subcategory = null
+    where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'$$,
+  '23514', null, 'partial category pairs are rejected'
+);
+select is_empty(
+  $$update public.clothing_items set category_group = 'アウター', subcategory = 'コート'
+    where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1' returning id$$,
+  'owner cannot categorize another user clothing'
 );
 select results_eq(
   $$select public.increment_clothing_view_count('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1')$$,

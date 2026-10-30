@@ -17,10 +17,11 @@ const savingKey = ref('')
 const errorMessage = ref('')
 const saveMessage = ref('')
 
-const upperCount = computed(() => items.value.filter(item =>
+const favoriteItems = computed(() => items.value.filter(item => item.is_favorite))
+const upperCount = computed(() => favoriteItems.value.filter(item =>
   ['トップス', 'アウター'].includes(closetGroupFor(item)),
 ).length)
-const lowerCount = computed(() => items.value.filter(item => closetGroupFor(item) === 'ボトムス').length)
+const lowerCount = computed(() => favoriteItems.value.filter(item => closetGroupFor(item) === 'ボトムス').length)
 const suggestions = computed(() => suggestLowViewOutfits(items.value, savedKeys.value, 3))
 
 watch(suggestions, async pairs => {
@@ -75,7 +76,7 @@ onMounted(load)
 <template>
   <main class="page-shell page-shell--compact">
     <h1 class="sr-only">コーデ提案</h1>
-    <p class="text-xs leading-6 text-neutral-500">閲覧回数が少ない服を優先して、上下を組み合わせます。</p>
+    <p class="text-xs leading-6 text-neutral-500">お気に入りの中から、閲覧回数が少ない服を優先して上下を組み合わせます。</p>
 
     <div v-if="loading" class="mt-8 space-y-4" aria-label="提案を読み込み中">
       <div v-for="index in 2" :key="index" class="h-64 animate-pulse rounded-2xl bg-neutral-200" />
@@ -91,8 +92,8 @@ onMounted(load)
       <div v-if="!suggestions.length" class="surface-card mt-8 px-5 py-10 text-center">
         <AppIcon name="sparkles" :size="32" class="mx-auto text-neutral-300" />
         <h2 class="mt-4 text-base font-bold">提案できる組み合わせがありません</h2>
-        <p class="mt-2 text-xs leading-6 text-neutral-500">{{ !upperCount || !lowerCount ? 'トップス・アウターとボトムスを1着ずつ登録してください。' : '新しい上下の組み合わせが見つかりませんでした。' }}</p>
-        <RouterLink :to="!upperCount || !lowerCount ? '/closet' : '/outfits'" class="secondary-button mt-5">{{ !upperCount || !lowerCount ? 'クローゼットを見る' : '保存したコーデを見る' }}<AppIcon name="arrow-right" :size="17" /></RouterLink>
+        <p class="mt-2 text-xs leading-6 text-neutral-500">{{ !upperCount || !lowerCount ? 'お気に入りのトップス・アウターとボトムスを1着ずつ追加してください。' : '新しい上下の組み合わせが見つかりませんでした。' }}</p>
+        <RouterLink :to="!upperCount || !lowerCount ? { path: '/closet', query: { favorites: '1' } } : '/outfits'" class="secondary-button mt-5">{{ !upperCount || !lowerCount ? 'お気に入りを見る' : '保存したコーデを見る' }}<AppIcon name="arrow-right" :size="17" /></RouterLink>
       </div>
 
       <section v-else class="mt-8 space-y-4" aria-label="コーデの候補">

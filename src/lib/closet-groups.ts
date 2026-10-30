@@ -3,7 +3,10 @@ import type { ClothingItem } from '../types/clothing.ts'
 export const closetGroups = ['アウター', 'トップス', 'ボトムス', 'レッグウェア', 'アクセサリー', 'その他'] as const
 export type ClosetGroup = (typeof closetGroups)[number]
 
-export function closetGroupFor(item: Pick<ClothingItem, 'name' | 'category'>): ClosetGroup {
+type ItemForGrouping = Pick<ClothingItem, 'name' | 'category'> & Partial<Pick<ClothingItem, 'category_group'>>
+
+export function closetGroupFor(item: ItemForGrouping): ClosetGroup {
+  if (closetGroups.includes(item.category_group as ClosetGroup)) return item.category_group as ClosetGroup
   const name = item.name.normalize('NFKC')
   if (/靴下|ソックス|タイツ|ストッキング|レギンス|レッグウォーマー|フットカバー|socks?|tights?|leggings?/i.test(name)) {
     return 'レッグウェア'

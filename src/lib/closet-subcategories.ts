@@ -10,10 +10,12 @@ export const closetSubcategories = {
   その他: ['ワンピース', 'ルームウェア', '雑貨', 'その他'],
 } as const satisfies Record<ClosetGroup, readonly string[]>
 
-type ItemForGrouping = Pick<ClothingItem, 'name' | 'category'>
+type ItemForGrouping = Pick<ClothingItem, 'name' | 'category'> &
+  Partial<Pick<ClothingItem, 'category_group' | 'subcategory'>>
 
 // Specific garment names take precedence over broader words such as ジャケット and パンツ.
 export function closetSubcategoryFor(item: ItemForGrouping, group: ClosetGroup = closetGroupFor(item)): string {
+  if ((closetSubcategories[group] as readonly string[]).includes(item.subcategory ?? '')) return item.subcategory!
   const name = item.name.normalize('NFKC').toLowerCase()
 
   switch (group) {

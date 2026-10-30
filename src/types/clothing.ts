@@ -37,6 +37,8 @@ export interface ClothingItem {
   brand: string
   collection: 'UNIQLO U' | 'UNIQLO : C' | null
   category: string
+  category_group: string | null
+  subcategory: string | null
   color: string
   size: string | null
   seasons: string[]
@@ -59,6 +61,8 @@ export interface ClothingInput {
   brand: string
   collection?: 'UNIQLO U' | 'UNIQLO : C' | null
   category: string
+  category_group?: string | null
+  subcategory?: string | null
   color: string
   size: string | null
   seasons: string[]

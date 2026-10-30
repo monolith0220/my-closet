@@ -1,7 +1,7 @@
 import type { ClothingItem } from '../types/clothing.ts'
 import { closetGroupFor } from './closet-groups.ts'
 
-type SuggestionItem = Pick<ClothingItem, 'id' | 'name' | 'category' | 'created_at' | 'is_active'> & {
+type SuggestionItem = Pick<ClothingItem, 'id' | 'name' | 'category' | 'created_at' | 'is_active' | 'is_favorite'> & {
   view_count?: number
 }
 
@@ -29,9 +29,9 @@ export function suggestLowViewOutfits<T extends SuggestionItem>(
   limit = 3,
 ): LowViewOutfit<T>[] {
   if (limit <= 0) return []
-  const tops = items.filter(item => item.is_active && ['トップス', 'アウター'].includes(closetGroupFor(item)))
+  const tops = items.filter(item => item.is_active && item.is_favorite && ['トップス', 'アウター'].includes(closetGroupFor(item)))
     .sort(compareItems)
-  const bottoms = items.filter(item => item.is_active && closetGroupFor(item) === 'ボトムス')
+  const bottoms = items.filter(item => item.is_active && item.is_favorite && closetGroupFor(item) === 'ボトムス')
     .sort(compareItems)
   const usedBottoms = new Set<string>()
   const suggestions: LowViewOutfit<T>[] = []

@@ -57,3 +57,13 @@ test('ほかの大分類も商品名と旧カテゴリから小分類を付け�
     assert.ok(closetSubcategories[group].includes(subcategory), item.name)
   }
 })
+
+test('明示した大分類と小分類を自動判定より優先する', () => {
+  const explicit = { name: 'スウェットパンツ', category: 'ボトムス', category_group: 'その他', subcategory: 'ルームウェア' }
+  assert.equal(closetGroupFor(explicit), 'その他')
+  assert.equal(closetSubcategoryFor(explicit), 'ルームウェア')
+
+  const invalid = { name: 'デニムパンツ', category: 'ボトムス', category_group: '不正', subcategory: '不正' }
+  assert.equal(closetGroupFor(invalid), 'ボトムス')
+  assert.equal(closetSubcategoryFor(invalid), 'デニム')
+})

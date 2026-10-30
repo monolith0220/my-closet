@@ -5,7 +5,7 @@ import { outfitPairKey, suggestLowViewOutfits } from '../src/lib/low-view-outfit
 function item(id, category, viewCount, extra = {}) {
   return {
     id, name: id, category, created_at: '2026-01-01T00:00:00Z',
-    is_active: true, view_count: viewCount, ...extra,
+    is_active: true, is_favorite: true, view_count: viewCount, ...extra,
   }
 }
 
@@ -39,4 +39,14 @@ test('上下が不足する場合は空、件数上限も守る', () => {
     item('a', 'トップス', 0), item('b', 'トップス', 0),
     item('c', 'ボトムス', 0), item('d', 'ボトムス', 0),
   ], new Set(), 1).length, 1)
+})
+
+test('お気に入りだけを提案候補にする', () => {
+  const pairs = suggestLowViewOutfits([
+    item('not-favorite-top', 'トップス', 0, { is_favorite: false }),
+    item('favorite-top', 'トップス', 5),
+    item('not-favorite-bottom', 'ボトムス', 0, { is_favorite: false }),
+    item('favorite-bottom', 'ボトムス', 5),
+  ])
+  assert.deepEqual(pairs.map(pair => [pair.top.id, pair.bottom.id]), [['favorite-top', 'favorite-bottom']])
 })

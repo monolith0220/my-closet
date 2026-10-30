@@ -32,12 +32,17 @@ const brand = ref(initial.brand)
 const collection = ref(initial.collection)
 const color = ref(initial.color)
 const favorites = ref(initial.favorites)
+const purchasedFrom = ref(initial.purchasedFrom)
+const purchasedTo = ref(initial.purchasedTo)
 const sort = ref<ClothingSort>(clothingSortOptions.some(option => option.value === route.query.sort)
   ? route.query.sort as ClothingSort : 'newest')
 
 const brands = computed(() => [...new Set(props.items.map(item => item.brand).filter(Boolean))]
   .sort((a, b) => a.localeCompare(b, 'ja')))
 const subcategories = computed(() => category.value ? closetSubcategories[category.value] : [])
+const invalidPurchaseRange = computed(() => Boolean(
+  purchasedFrom.value && purchasedTo.value && purchasedFrom.value > purchasedTo.value,
+))
 const results = computed(() => filterClothingItems(props.items, {
   q: search.value,
   category: category.value,
@@ -47,6 +52,8 @@ const results = computed(() => filterClothingItems(props.items, {
   collection: collection.value,
   color: color.value,
   favorites: favorites.value,
+  purchasedFrom: purchasedFrom.value,
+  purchasedTo: purchasedTo.value,
 }))
 
 watch(() => route.query, query => {
@@ -60,6 +67,8 @@ watch(() => route.query, query => {
   collection.value = criteria.collection
   color.value = criteria.color
   favorites.value = criteria.favorites
+  purchasedFrom.value = criteria.purchasedFrom
+  purchasedTo.value = criteria.purchasedTo
   sort.value = clothingSortOptions.some(option => option.value === query.sort)
     ? query.sort as ClothingSort : 'newest'
 })
@@ -78,11 +87,13 @@ function clearFilters() {
   collection.value = ''
   color.value = ''
   favorites.value = false
+  purchasedFrom.value = ''
+  purchasedTo.value = ''
   sort.value = 'newest'
 }
 
 function showResults() {
-  if (props.loading || props.errorMessage || !results.value.length) return
+  if (props.loading || props.errorMessage || invalidPurchaseRange.value || !results.value.length) return
   const query: Record<string, string> = {}
   if (search.value.trim()) query.q = search.value.trim()
   if (category.value) query.category = category.value
@@ -92,6 +103,8 @@ function showResults() {
   if (collection.value) query.collection = collection.value
   if (color.value) query.color = color.value
   if (favorites.value) query.favorites = '1'
+  if (purchasedFrom.value) query.purchased_from = purchasedFrom.value
+  if (purchasedTo.value) query.purchased_to = purchasedTo.value
   if (sort.value !== 'newest') query.sort = sort.value
   emit('apply', query)
 }
@@ -134,6 +147,14 @@ onUnmounted(() => {
             <div><label for="search-color" class="field-label">カラー</label><select id="search-color" v-model="color" class="field-select"><option value="">すべて</option><option v-for="choice in colors" :key="choice" :value="choice">{{ choice }}</option></select></div>
           </div>
           <div class="mt-3"><label for="search-collection" class="field-label">ユニクロライン</label><select id="search-collection" v-model="collection" class="field-select"><option value="">すべて</option><option v-for="choice in uniqloCollections" :key="choice" :value="choice">{{ choice }}</option></select></div>
+          <fieldset class="mt-3">
+            <legend class="field-label">購入日</legend>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label for="search-purchased-from" class="mb-1 block text-[11px] text-neutral-500">開始日</label><input id="search-purchased-from" v-model="purchasedFrom" type="date" class="field-input" /></div>
+              <div><label for="search-purchased-to" class="mb-1 block text-[11px] text-neutral-500">終了日</label><input id="search-purchased-to" v-model="purchasedTo" type="date" class="field-input" /></div>
+            </div>
+            <p v-if="invalidPurchaseRange" role="alert" class="mt-2 text-xs text-red-700">開始日は終了日以前にしてください。</p>
+          </fieldset>
           <div v-if="category === 'トップス'" class="mt-3"><label for="search-sleeve" class="field-label">袖丈</label><select id="search-sleeve" v-model="sleeve" class="field-select"><option value="すべて">すべて</option><option value="半袖">半袖</option><option value="長袖">長袖</option><option value="不明">不明</option></select></div>
           <label class="mt-4 inline-flex min-h-11 items-center gap-3 text-xs font-semibold text-neutral-700"><input v-model="favorites" type="checkbox" class="h-4 w-4 accent-neutral-950" />お気に入りのみ</label>
           <button type="button" class="text-button mt-2 block text-xs" @click="clearFilters">条件をクリア</button>
@@ -148,9 +169,9 @@ onUnmounted(() => {
           <p v-if="loading" class="text-sm text-neutral-500">読み込み中...</p>
           <div v-else-if="errorMessage" role="alert" class="surface-card px-5 py-8"><p class="text-sm text-red-700">{{ errorMessage }}</p><button type="button" class="secondary-button mt-5" @click="emit('retry')">再読み込み</button></div>
           <template v-else>
-            <p class="text-sm font-semibold">{{ results.length }} 着が該当します</p>
-            <p v-if="!results.length" class="mt-2 text-xs text-neutral-500">条件を変えて検索してください。</p>
-            <button type="button" class="primary-button mt-4 w-full" :disabled="!results.length" @click="showResults">{{ results.length }} 着をクローゼットに表示<AppIcon name="arrow-right" :size="17" /></button>
+            <p class="text-sm font-semibold">{{ invalidPurchaseRange ? 0 : results.length }} 着が該当します</p>
+            <p v-if="!results.length && !invalidPurchaseRange" class="mt-2 text-xs text-neutral-500">条件を変えて検索してください。</p>
+            <button type="button" class="primary-button mt-4 w-full" :disabled="invalidPurchaseRange || !results.length" @click="showResults">{{ invalidPurchaseRange ? 0 : results.length }} 着をクローゼットに表示<AppIcon name="arrow-right" :size="17" /></button>
           </template>
         </section>
       </div>

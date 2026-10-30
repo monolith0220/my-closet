@@ -32,7 +32,7 @@ let suppressedClickId = ''
 
 const selectedCount = computed(() => selectedIds.value.size)
 const searchOpen = computed(() => route.query.search === '1')
-const filterQueryKeys = ['q', 'category', 'subcategory', 'sleeve', 'brand', 'collection', 'color', 'favorites', 'sort'] as const
+const filterQueryKeys = ['q', 'category', 'subcategory', 'sleeve', 'brand', 'collection', 'color', 'favorites', 'purchased_from', 'purchased_to', 'sort'] as const
 const filterQuerySignature = computed(() => JSON.stringify(filterQueryKeys.map(key => route.query[key])))
 
 function clearPressTimer() {
