@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
 import { listClothing, signedClothingImages } from '../lib/clothing'
@@ -8,6 +9,8 @@ import { formatClothingSize } from '../lib/clothing-display'
 import { createOutfitPair, deleteOutfitPair, listOutfitPairs, type OutfitPair } from '../lib/outfits'
 import type { ClothingItem } from '../types/clothing'
 
+const route = useRoute()
+const router = useRouter()
 const session = useSession()
 const items = ref<ClothingItem[]>([])
 const outfits = ref<OutfitPair[]>([])
@@ -54,6 +57,21 @@ function savedDate(value: string): string {
   return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' }).format(date)
 }
 
+async function applyPreselectedItem() {
+  const selectedId = typeof route.query.clothing_id === 'string' ? route.query.clothing_id : ''
+  if (!selectedId) return
+  const selected = items.value.find(item => item.id === selectedId)
+  if (!selected) {
+    formError.value = '選択したアイテムをコーデに使用できません。'
+  } else {
+    const group = closetGroupFor(selected)
+    if (['トップス', 'アウター'].includes(group)) upperId.value = selected.id
+    else if (group === 'ボトムス') lowerId.value = selected.id
+    else formError.value = 'トップス・アウター・ボトムスから選択してください。'
+  }
+  await router.replace({ path: '/outfits' })
+}
+
 async function signVisibleImages() {
   if (imageSigning) {
     imageSigningQueued = true
@@ -94,6 +112,7 @@ async function load() {
     items.value = clothing
     outfits.value = saved
     visibleCount.value = 10
+    await applyPreselectedItem()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'コーデを読み込めませんでした。'
   } finally {

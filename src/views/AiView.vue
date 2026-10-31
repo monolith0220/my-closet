@@ -5,7 +5,7 @@ import { useSession } from '../lib/auth-context'
 import { listClothing, signedClothingImages } from '../lib/clothing'
 import { closetGroupFor } from '../lib/closet-groups'
 import { createOutfitPair, listOutfitPairs } from '../lib/outfits'
-import { outfitPairKey, suggestLowViewOutfits } from '../lib/low-view-outfits'
+import { itemMatchesSeason, outfitPairKey, seasonForDate, suggestLowViewOutfits } from '../lib/low-view-outfits'
 import type { ClothingItem } from '../types/clothing'
 
 const session = useSession()
@@ -16,13 +16,14 @@ const loading = ref(true)
 const savingKey = ref('')
 const errorMessage = ref('')
 const saveMessage = ref('')
+const currentSeason = seasonForDate()
 
-const favoriteItems = computed(() => items.value.filter(item => item.is_favorite))
-const upperCount = computed(() => favoriteItems.value.filter(item =>
+const seasonalItems = computed(() => items.value.filter(item => itemMatchesSeason(item, currentSeason)))
+const upperCount = computed(() => seasonalItems.value.filter(item =>
   ['トップス', 'アウター'].includes(closetGroupFor(item)),
 ).length)
-const lowerCount = computed(() => favoriteItems.value.filter(item => closetGroupFor(item) === 'ボトムス').length)
-const suggestions = computed(() => suggestLowViewOutfits(items.value, savedKeys.value, 3))
+const lowerCount = computed(() => seasonalItems.value.filter(item => closetGroupFor(item) === 'ボトムス').length)
+const suggestions = computed(() => suggestLowViewOutfits(items.value, savedKeys.value, 3, currentSeason))
 
 watch(suggestions, async pairs => {
   const paths = [...new Set(pairs.flatMap(pair => [pair.top.image_path, pair.bottom.image_path])
@@ -76,7 +77,8 @@ onMounted(load)
 <template>
   <main class="page-shell page-shell--compact">
     <h1 class="sr-only">コーデ提案</h1>
-    <p class="text-xs leading-6 text-neutral-500">お気に入りの中から、閲覧回数が少ない服を優先して上下を組み合わせます。</p>
+    <p class="text-xs leading-6 text-neutral-500">現在は{{ currentSeason }}。{{ currentSeason }}向けの服から、閲覧回数が少ない上下を優先して組み合わせます。</p>
+    <p class="mt-1 text-[11px] leading-5 text-neutral-400">季節未設定の服は通年アイテムとして候補に含めます。</p>
 
     <div v-if="loading" class="mt-8 space-y-4" aria-label="提案を読み込み中">
       <div v-for="index in 2" :key="index" class="h-64 animate-pulse rounded-2xl bg-neutral-200" />
@@ -92,8 +94,8 @@ onMounted(load)
       <div v-if="!suggestions.length" class="surface-card mt-8 px-5 py-10 text-center">
         <AppIcon name="sparkles" :size="32" class="mx-auto text-neutral-300" />
         <h2 class="mt-4 text-base font-bold">提案できる組み合わせがありません</h2>
-        <p class="mt-2 text-xs leading-6 text-neutral-500">{{ !upperCount || !lowerCount ? 'お気に入りのトップス・アウターとボトムスを1着ずつ追加してください。' : '新しい上下の組み合わせが見つかりませんでした。' }}</p>
-        <RouterLink :to="!upperCount || !lowerCount ? { path: '/closet', query: { favorites: '1' } } : '/outfits'" class="secondary-button mt-5">{{ !upperCount || !lowerCount ? 'お気に入りを見る' : '保存したコーデを見る' }}<AppIcon name="arrow-right" :size="17" /></RouterLink>
+        <p class="mt-2 text-xs leading-6 text-neutral-500">{{ !upperCount || !lowerCount ? `${currentSeason}向けのトップス・アウターとボトムスを1着ずつ登録してください。` : '新しい上下の組み合わせが見つかりませんでした。' }}</p>
+        <RouterLink :to="!upperCount || !lowerCount ? '/closet' : '/outfits'" class="secondary-button mt-5">{{ !upperCount || !lowerCount ? 'クローゼットを見る' : '保存したコーデを見る' }}<AppIcon name="arrow-right" :size="17" /></RouterLink>
       </div>
 
       <section v-else class="mt-8 space-y-4" aria-label="コーデの候補">

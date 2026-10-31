@@ -1,7 +1,7 @@
-import type { ClothingItem } from '../types/clothing.ts'
+import type { ClothingItem, Season } from '../types/clothing.ts'
 import { closetGroupFor } from './closet-groups.ts'
 
-type SuggestionItem = Pick<ClothingItem, 'id' | 'name' | 'category' | 'created_at' | 'is_active' | 'is_favorite'> & {
+type SuggestionItem = Pick<ClothingItem, 'id' | 'name' | 'category' | 'created_at' | 'is_active' | 'seasons'> & {
   view_count?: number
 }
 
@@ -12,6 +12,18 @@ export interface LowViewOutfit<T extends SuggestionItem = ClothingItem> {
 
 export function outfitPairKey(topId: string, bottomId: string): string {
   return topId + ':' + bottomId
+}
+
+export function seasonForDate(date = new Date()): Season {
+  const month = date.getMonth() + 1
+  if (month >= 3 && month <= 5) return '春'
+  if (month >= 6 && month <= 8) return '夏'
+  if (month >= 9 && month <= 11) return '秋'
+  return '冬'
+}
+
+export function itemMatchesSeason(item: Pick<SuggestionItem, 'seasons'>, season: Season): boolean {
+  return !item.seasons.length || item.seasons.includes(season)
 }
 
 function compareItems<T extends SuggestionItem>(first: T, second: T): number {
@@ -27,11 +39,12 @@ export function suggestLowViewOutfits<T extends SuggestionItem>(
   items: T[],
   excludedPairs: ReadonlySet<string> = new Set<string>(),
   limit = 3,
+  season: Season = seasonForDate(),
 ): LowViewOutfit<T>[] {
   if (limit <= 0) return []
-  const tops = items.filter(item => item.is_active && item.is_favorite && ['トップス', 'アウター'].includes(closetGroupFor(item)))
+  const tops = items.filter(item => item.is_active && itemMatchesSeason(item, season) && ['トップス', 'アウター'].includes(closetGroupFor(item)))
     .sort(compareItems)
-  const bottoms = items.filter(item => item.is_active && item.is_favorite && closetGroupFor(item) === 'ボトムス')
+  const bottoms = items.filter(item => item.is_active && itemMatchesSeason(item, season) && closetGroupFor(item) === 'ボトムス')
     .sort(compareItems)
   const usedBottoms = new Set<string>()
   const suggestions: LowViewOutfit<T>[] = []

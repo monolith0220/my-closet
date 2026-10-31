@@ -67,3 +67,10 @@ export function closetSubcategoryFor(item: ItemForGrouping, group: ClosetGroup =
       return 'その他'
   }
 }
+
+export function sortClothingBySubcategory<T extends ItemForGrouping>(items: T[], group: ClosetGroup): T[] {
+  const order: readonly string[] = closetSubcategories[group]
+  return [...items].sort((first, second) =>
+    order.indexOf(closetSubcategoryFor(first, group)) - order.indexOf(closetSubcategoryFor(second, group)),
+  )
+}

@@ -5,8 +5,10 @@ import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
 import { createClothing, getClothing, removeClothingImage, signedClothingImage, updateClothing, uploadClothingImage } from '../lib/clothing'
 import { formatClothingSize, normalizePurchaseDate, purchaseDateFor, stripPurchaseDateFromMemo } from '../lib/clothing-display'
+import { closetGroupFor, closetGroups, type ClosetGroup } from '../lib/closet-groups'
+import { closetSubcategories, closetSubcategoryFor } from '../lib/closet-subcategories'
 import { uniqloCollections, type UniqloCollection } from '../lib/uniqlo-collection'
-import { categories, colors, seasons, type ClothingInput, type ClothingItem, type Season } from '../types/clothing'
+import { colors, seasons, type ClothingInput, type ClothingItem, type Season } from '../types/clothing'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,7 +28,8 @@ const form = reactive({
   name: '',
   brand: '',
   collection: '' as UniqloCollection | '',
-  category: '',
+  categoryGroup: '' as ClosetGroup | '',
+  subcategory: '',
   color: '',
   size: '',
   purchaseDate: '',
@@ -36,6 +39,7 @@ const form = reactive({
   productUrl: '',
   memo: '',
 })
+const subcategoryOptions = computed(() => form.categoryGroup ? closetSubcategories[form.categoryGroup] : [])
 
 type UniqloUrlDetails = {
   productCode: string
@@ -125,6 +129,10 @@ function toggleSeason(season: Season) {
   else form.seasons.splice(index, 1)
 }
 
+function changeCategoryGroup() {
+  form.subcategory = ''
+}
+
 function optional(value: string): string | null {
   return value.trim() || null
 }
@@ -136,7 +144,9 @@ function inputPayload(imagePath: string | null): ClothingInput {
     name: form.name.trim(),
     brand: form.brand.trim(),
     collection: form.collection || null,
-    category: form.category,
+    category: form.categoryGroup,
+    category_group: form.categoryGroup || null,
+    subcategory: form.subcategory || null,
     color: form.color,
     size: originalSize && displaySize === formatClothingSize(originalSize) ? originalSize : displaySize,
     purchased_at: form.purchaseDate ? normalizePurchaseDate(form.purchaseDate) : null,
@@ -154,8 +164,12 @@ async function save() {
   const userId = session.value?.user.id
   if (!userId || saving.value) return
   errorMessage.value = ''
-  if (!form.name.trim() || !form.brand.trim() || !form.category || !form.color) {
+  if (!form.name.trim() || !form.brand.trim() || !form.categoryGroup || !form.subcategory || !form.color) {
     errorMessage.value = '必須項目を入力してください。'
+    return
+  }
+  if (!(closetSubcategories[form.categoryGroup] as readonly string[]).includes(form.subcategory)) {
+    errorMessage.value = '大分類に合う小分類を選択してください。'
     return
   }
   if (form.purchaseDate && !normalizePurchaseDate(form.purchaseDate)) {
@@ -206,7 +220,8 @@ onMounted(async () => {
     form.name = item.name
     form.brand = item.brand
     form.collection = item.collection ?? ''
-    form.category = item.category
+    form.categoryGroup = closetGroupFor(item)
+    form.subcategory = closetSubcategoryFor(item, form.categoryGroup)
     form.color = item.color
     form.size = formatClothingSize(item.size)
     form.purchaseDate = item.purchased_at ?? purchaseDateFor(item) ?? ''
@@ -258,9 +273,10 @@ onUnmounted(revokePreview)
         <div><label for="item-brand" class="field-label">ブランド <span class="text-red-500">*</span></label><input id="item-brand" v-model="form.brand" class="field-input" type="text" maxlength="80" placeholder="例：UNIQLO" required /></div>
         <div><label for="item-collection" class="field-label">ユニクロライン</label><select id="item-collection" v-model="form.collection" class="field-select"><option value="">未設定</option><option v-for="choice in uniqloCollections" :key="choice" :value="choice">{{ choice }}</option></select></div>
         <div class="grid grid-cols-2 gap-3">
-          <div><label for="item-category" class="field-label">カテゴリ <span class="text-red-500">*</span></label><select id="item-category" v-model="form.category" class="field-select" required><option value="" disabled>選択</option><option v-for="choice in categories" :key="choice" :value="choice">{{ choice }}</option></select></div>
-          <div><label for="item-color" class="field-label">カラー <span class="text-red-500">*</span></label><select id="item-color" v-model="form.color" class="field-select" required><option value="" disabled>選択</option><option v-for="choice in colors" :key="choice" :value="choice">{{ choice }}</option></select></div>
+          <div><label for="item-category-group" class="field-label">大分類 <span class="text-red-500">*</span></label><select id="item-category-group" v-model="form.categoryGroup" class="field-select" required @change="changeCategoryGroup"><option value="" disabled>選択</option><option v-for="choice in closetGroups" :key="choice" :value="choice">{{ choice }}</option></select></div>
+          <div><label for="item-subcategory" class="field-label">小分類 <span class="text-red-500">*</span></label><select id="item-subcategory" v-model="form.subcategory" class="field-select" :disabled="!form.categoryGroup" required><option value="" disabled>選択</option><option v-for="choice in subcategoryOptions" :key="choice" :value="choice">{{ choice }}</option></select></div>
         </div>
+        <div><label for="item-color" class="field-label">カラー <span class="text-red-500">*</span></label><select id="item-color" v-model="form.color" class="field-select" required><option value="" disabled>選択</option><option v-for="choice in colors" :key="choice" :value="choice">{{ choice }}</option></select></div>
         <div><label for="item-size" class="field-label">サイズ</label><input id="item-size" v-model="form.size" class="field-input" type="text" maxlength="30" placeholder="例：M / 26.5cm" /></div>
         <div><label for="item-purchase-date" class="field-label">購入日</label><input id="item-purchase-date" v-model="form.purchaseDate" class="field-input" type="date" /></div>
         <div><span class="field-label">季節</span><div class="grid grid-cols-4 gap-2"><button v-for="season in seasons" :key="season" type="button" class="min-h-11 rounded-xl border text-sm font-semibold transition" :class="form.seasons.includes(season) ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-200 bg-white text-neutral-600'" :aria-pressed="form.seasons.includes(season)" @click="toggleSeason(season)">{{ season }}</button></div></div>

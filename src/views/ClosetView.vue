@@ -7,6 +7,7 @@ import { useSession } from '../lib/auth-context'
 import { deleteClothing, listClothing, signedClothingImages } from '../lib/clothing'
 import { clothingSortOptions, sortClothing, type ClothingSort } from '../lib/clothing-display'
 import { criteriaFromQuery, filterClothingItems } from '../lib/closet-search'
+import { closetSubcategories, closetSubcategoryFor, sortClothingBySubcategory } from '../lib/closet-subcategories'
 import type { ClothingItem } from '../types/clothing'
 
 const route = useRoute()
@@ -138,16 +139,32 @@ function queryValue(key: string): string {
 
 const hasSearch = computed(() => filterQueryKeys.some(key => route.query[key] !== undefined))
 
-const filteredItems = computed(() => filterClothingItems(items.value, criteriaFromQuery(route.query)))
+const searchCriteria = computed(() => criteriaFromQuery(route.query))
+const filteredItems = computed(() => filterClothingItems(items.value, searchCriteria.value))
+const groupBySubcategory = computed(() => Boolean(searchCriteria.value.category && !searchCriteria.value.subcategory))
 
 const sortedItems = computed(() => {
   const requestedSort = queryValue('sort')
   const sort = clothingSortOptions.some(option => option.value === requestedSort)
     ? requestedSort as ClothingSort
     : 'newest'
-  return sortClothing(filteredItems.value, sort)
+  const sorted = sortClothing(filteredItems.value, sort)
+  const category = searchCriteria.value.category
+  if (!category || searchCriteria.value.subcategory) return sorted
+  return sortClothingBySubcategory(sorted, category)
 })
 const visibleItems = computed(() => sortedItems.value.slice(0, visibleCount.value))
+const visibleSections = computed(() => {
+  const category = searchCriteria.value.category
+  if (!groupBySubcategory.value || !category) {
+    return [{ label: '', total: sortedItems.value.length, items: visibleItems.value }]
+  }
+  return closetSubcategories[category].map(label => ({
+    label,
+    total: sortedItems.value.filter(item => closetSubcategoryFor(item, category) === label).length,
+    items: visibleItems.value.filter(item => closetSubcategoryFor(item, category) === label),
+  })).filter(section => section.items.length)
+})
 
 watch(filterQuerySignature, () => {
   visibleCount.value = 32
@@ -262,15 +279,20 @@ onUnmounted(() => {
       <p class="mt-2 text-xs text-neutral-500">{{ hasSearch ? '検索画面で条件を変えてください。' : '追加ボタンから最初の一着を登録できます。' }}</p>
     </div>
     <template v-else>
-      <div class="grid grid-cols-4 gap-x-2 gap-y-4" aria-label="クローゼットのアイテム">
-        <button v-for="item in visibleItems" :key="item.id" type="button" :title="item.name" class="block min-w-0 select-none text-left touch-pan-y" :disabled="deletingSelected" :aria-label="selectionMode ? `${item.name}を${selectedIds.has(item.id) ? '選択解除' : '選択'}` : `${item.brand} ${item.name}の詳細を開く`" :aria-pressed="selectionMode ? selectedIds.has(item.id) : undefined" @pointerdown="beginPress($event, item.id)" @pointermove="movePress" @pointerup="clearPressTimer" @pointercancel="clearPressTimer" @pointerleave="clearPressTimer" @contextmenu.prevent="onContextMenu(item.id)" @click="openItem(item.id)">
-          <div class="relative aspect-[4/5] overflow-hidden rounded-xl bg-[#ecece9]" :class="selectionMode && selectedIds.has(item.id) ? 'ring-2 ring-neutral-950 ring-offset-1' : ''">
-            <img v-if="imageUrls[item.id]" :src="imageUrls[item.id]" :alt="item.name" class="h-full w-full object-contain" loading="lazy" />
-            <div v-else class="flex h-full flex-col items-center justify-center gap-1 text-neutral-300"><AppIcon name="shirt" :size="25" /><span class="text-[8px]">NO PHOTO</span></div>
-            <span v-if="selectionMode" class="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-neutral-300 bg-white text-neutral-950" aria-hidden="true"><AppIcon v-if="selectedIds.has(item.id)" name="check" :size="13" /></span>
+      <div class="space-y-6" aria-label="クローゼットのアイテム">
+        <section v-for="section in visibleSections" :key="section.label || 'all'">
+          <div v-if="section.label" class="mb-3 flex items-center justify-between"><h2 class="text-xs font-bold">{{ section.label }}</h2><span class="text-[10px] text-neutral-400">{{ section.total }} 着</span></div>
+          <div class="grid grid-cols-4 gap-x-2 gap-y-4">
+            <button v-for="item in section.items" :key="item.id" type="button" :title="item.name" class="block min-w-0 select-none text-left touch-pan-y" :disabled="deletingSelected" :aria-label="selectionMode ? `${item.name}を${selectedIds.has(item.id) ? '選択解除' : '選択'}` : `${item.brand} ${item.name}の詳細を開く`" :aria-pressed="selectionMode ? selectedIds.has(item.id) : undefined" @pointerdown="beginPress($event, item.id)" @pointermove="movePress" @pointerup="clearPressTimer" @pointercancel="clearPressTimer" @pointerleave="clearPressTimer" @contextmenu.prevent="onContextMenu(item.id)" @click="openItem(item.id)">
+              <div class="relative aspect-[4/5] overflow-hidden rounded-xl bg-[#ecece9]" :class="selectionMode && selectedIds.has(item.id) ? 'ring-2 ring-neutral-950 ring-offset-1' : ''">
+                <img v-if="imageUrls[item.id]" :src="imageUrls[item.id]" :alt="item.name" class="h-full w-full object-contain" loading="lazy" />
+                <div v-else class="flex h-full flex-col items-center justify-center gap-1 text-neutral-300"><AppIcon name="shirt" :size="25" /><span class="text-[8px]">NO PHOTO</span></div>
+                <span v-if="selectionMode" class="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-neutral-300 bg-white text-neutral-950" aria-hidden="true"><AppIcon v-if="selectedIds.has(item.id)" name="check" :size="13" /></span>
+              </div>
+              <p class="mt-1 truncate text-[10px] font-medium text-neutral-700">{{ item.name }}</p>
+            </button>
           </div>
-          <p class="mt-1 truncate text-[10px] font-medium text-neutral-700">{{ item.name }}</p>
-        </button>
+        </section>
       </div>
       <div v-if="visibleItems.length < sortedItems.length" ref="loadMoreAnchor" class="h-px" aria-hidden="true" />
     </template>

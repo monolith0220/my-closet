@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { closetGroupFor, closetGroups } from '../src/lib/closet-groups.ts'
-import { closetSubcategories, closetSubcategoryFor } from '../src/lib/closet-subcategories.ts'
+import { closetSubcategories, closetSubcategoryFor, sortClothingBySubcategory } from '../src/lib/closet-subcategories.ts'
 
 test('すべての大分類に重複のない小分類と「その他」がある', () => {
   assert.deepEqual(closetSubcategories.アウター, ['ブルゾン', 'ジャケット', 'ダウン', 'コート', 'パーカ', 'その他'])
@@ -66,4 +66,16 @@ test('明示した大分類と小分類を自動判定より優先する', () =>
   const invalid = { name: 'デニムパンツ', category: 'ボトムス', category_group: '不正', subcategory: '不正' }
   assert.equal(closetGroupFor(invalid), 'ボトムス')
   assert.equal(closetSubcategoryFor(invalid), 'デニム')
+})
+
+test('大分類だけの表示は小分類ごとに並べる', () => {
+  const items = [
+    { id: 'sweat-1', name: 'スウェット', category: 'トップス' },
+    { id: 'tee-1', name: 'Tシャツ', category: 'トップス' },
+    { id: 'shirt-1', name: 'オックスフォードシャツ', category: 'トップス' },
+    { id: 'tee-2', name: 'クルーネックTシャツ', category: 'トップス' },
+  ]
+  assert.deepEqual(sortClothingBySubcategory(items, 'トップス').map(item => item.id), [
+    'tee-1', 'tee-2', 'shirt-1', 'sweat-1',
+  ])
 })
