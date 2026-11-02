@@ -2,7 +2,7 @@
 -- Seed rows as the test runner's privileged role, then exercise the actual client roles.
 begin;
 
-select plan(55);
+select plan(61);
 
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'closet-owner@example.test'),
@@ -24,6 +24,7 @@ select ok((select relrowsecurity from pg_class where oid = 'public.clothing_item
 select ok((select relrowsecurity from pg_class where oid = 'public.outfits'::regclass), 'outfits has RLS');
 select ok((select relrowsecurity from pg_class where oid = 'public.outfit_items'::regclass), 'outfit_items has RLS');
 select is((select public from storage.buckets where id = 'clothing-images'), false, 'image bucket is private');
+select is((select public from storage.buckets where id = 'outfit-images'), false, 'AI outfit image bucket is private');
 
 set local role anon;
 select throws_ok($$select * from public.clothing_items$$, '42501', null, 'signed-out user cannot read clothing');
@@ -180,10 +181,11 @@ select results_eq(
     returning role$$,
   array['top'], 'owner can link their own clothing to their own outfit'
 );
-select throws_ok(
-  $$insert into public.outfit_items (outfit_id, clothing_item_id, role)
-    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'top')$$,
-  '23505', null, 'a saved pair cannot have two tops'
+select results_eq(
+  $$insert into public.outfit_items (outfit_id, clothing_item_id, role, position)
+    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'top', 1)
+    returning position$$,
+  array[1], 'an outfit can have multiple ordered tops'
 );
 select throws_ok(
   $$insert into public.outfit_items (outfit_id, clothing_item_id, user_id)
@@ -224,6 +226,23 @@ select throws_ok(
     values ('clothing-images', '22222222-2222-2222-2222-222222222222/stolen.jpg')$$,
   '42501', null, 'owner cannot upload into another user folder'
 );
+select results_eq(
+  $$insert into storage.objects (bucket_id, name)
+    values ('outfit-images', '11111111-1111-1111-1111-111111111111/outfit.webp')
+    returning name$$,
+  array['11111111-1111-1111-1111-111111111111/outfit.webp'],
+  'owner can cache an AI outfit image in their own folder'
+);
+select results_eq(
+  $$select name from storage.objects where bucket_id = 'outfit-images'$$,
+  array['11111111-1111-1111-1111-111111111111/outfit.webp'],
+  'owner can read their AI outfit image'
+);
+select throws_ok(
+  $$insert into storage.objects (bucket_id, name)
+    values ('outfit-images', '22222222-2222-2222-2222-222222222222/stolen.webp')$$,
+  '42501', null, 'owner cannot cache an AI image in another user folder'
+);
 
 set local request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select results_eq($$select name from public.clothing_items$$, array['Other jacket'], 'second user reads only their clothing');
@@ -240,6 +259,12 @@ select is_empty(
     where bucket_id = 'clothing-images'
       and name = '11111111-1111-1111-1111-111111111111/photo.jpg'$$,
   'second user cannot read first user image'
+);
+select is_empty(
+  $$select * from storage.objects
+    where bucket_id = 'outfit-images'
+      and name = '11111111-1111-1111-1111-111111111111/outfit.webp'$$,
+  'second user cannot read first user AI outfit image'
 );
 select is_empty(
   $$update storage.objects set name = '22222222-2222-2222-2222-222222222222/stolen.jpg'
@@ -265,6 +290,13 @@ select results_eq(
       and name = '11111111-1111-1111-1111-111111111111/photo.jpg' returning name$$,
   array['11111111-1111-1111-1111-111111111111/photo.jpg'],
   'owner can delete their image'
+);
+select results_eq(
+  $$delete from storage.objects
+    where bucket_id = 'outfit-images'
+      and name = '11111111-1111-1111-1111-111111111111/outfit.webp' returning name$$,
+  array['11111111-1111-1111-1111-111111111111/outfit.webp'],
+  'owner can delete their AI outfit image'
 );
 
 select * from finish();

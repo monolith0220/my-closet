@@ -1,11 +1,12 @@
 import type { ClothingItem } from '../types/clothing'
+import { validateOutfitSelection } from './outfit-selection'
 import { supabase } from './supabase'
 
-export interface OutfitPair {
+export interface OutfitSet {
   id: string
   title: string
   created_at: string
-  top: ClothingItem
+  tops: ClothingItem[]
   bottom: ClothingItem
 }
 
@@ -19,6 +20,7 @@ interface OutfitItemRow {
   outfit_id: string
   clothing_item_id: string
   role: string
+  position: number
 }
 
 function client() {
@@ -26,7 +28,7 @@ function client() {
   return supabase
 }
 
-export async function listOutfitPairs(userId: string): Promise<OutfitPair[]> {
+export async function listOutfits(userId: string): Promise<OutfitSet[]> {
   const { data: outfitsData, error: outfitsError } = await client()
     .from('outfits')
     .select('id, title, created_at')
@@ -38,7 +40,7 @@ export async function listOutfitPairs(userId: string): Promise<OutfitPair[]> {
 
   const { data: linksData, error: linksError } = await client()
     .from('outfit_items')
-    .select('outfit_id, clothing_item_id, role')
+    .select('outfit_id, clothing_item_id, role, position')
     .eq('user_id', userId)
     .in('outfit_id', outfits.map(outfit => outfit.id))
     .in('role', ['top', 'bottom'])
@@ -58,30 +60,35 @@ export async function listOutfitPairs(userId: string): Promise<OutfitPair[]> {
 
   return outfits.flatMap(outfit => {
     const pairLinks = links.filter(link => link.outfit_id === outfit.id)
-    const top = clothing.get(pairLinks.find(link => link.role === 'top')?.clothing_item_id ?? '')
+    const tops = pairLinks
+      .filter(link => link.role === 'top')
+      .sort((first, second) => first.position - second.position)
+      .map(link => clothing.get(link.clothing_item_id))
+      .filter((item): item is ClothingItem => Boolean(item))
     const bottom = clothing.get(pairLinks.find(link => link.role === 'bottom')?.clothing_item_id ?? '')
-    return top && bottom ? [{ ...outfit, top, bottom }] : []
+    return tops.length && bottom ? [{ ...outfit, tops, bottom }] : []
   })
 }
 
-export async function createOutfitPair(
+export async function createOutfit(
   userId: string,
   title: string,
-  topId: string,
+  topIds: string[],
   bottomId: string,
 ): Promise<void> {
   const trimmedTitle = title.trim()
   if (!trimmedTitle) throw new Error('コーデ名を入力してください。')
-  if (!topId || !bottomId || topId === bottomId) throw new Error('異なるトップスとボトムスを選んでください。')
+  const tops = validateOutfitSelection(topIds, bottomId)
+  const selectedIds = [...tops, bottomId]
 
   const { data: selectedData, error: selectedError } = await client()
     .from('clothing_items')
     .select('id')
     .eq('user_id', userId)
     .eq('is_active', true)
-    .in('id', [topId, bottomId])
+    .in('id', selectedIds)
   if (selectedError) throw selectedError
-  if (selectedData?.length !== 2) throw new Error('選択した洋服を確認できません。')
+  if (selectedData?.length !== selectedIds.length) throw new Error('選択した洋服を確認できません。')
 
   const { data: outfit, error: outfitError } = await client()
     .from('outfits')
@@ -93,8 +100,14 @@ export async function createOutfitPair(
   const { error: linksError } = await client()
     .from('outfit_items')
     .insert([
-      { outfit_id: outfit.id, clothing_item_id: topId, user_id: userId, role: 'top' },
-      { outfit_id: outfit.id, clothing_item_id: bottomId, user_id: userId, role: 'bottom' },
+      ...tops.map((clothingItemId, position) => ({
+        outfit_id: outfit.id,
+        clothing_item_id: clothingItemId,
+        user_id: userId,
+        role: 'top',
+        position,
+      })),
+      { outfit_id: outfit.id, clothing_item_id: bottomId, user_id: userId, role: 'bottom', position: 0 },
     ])
   if (!linksError) return
 
@@ -107,7 +120,7 @@ export async function createOutfitPair(
   throw linksError
 }
 
-export async function deleteOutfitPair(id: string, userId: string): Promise<void> {
+export async function deleteOutfit(id: string, userId: string): Promise<void> {
   const { data, error } = await client()
     .from('outfits')
     .delete()

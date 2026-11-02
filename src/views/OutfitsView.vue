@@ -6,14 +6,14 @@ import { useSession } from '../lib/auth-context'
 import { listClothing, signedClothingImages } from '../lib/clothing'
 import { closetGroupFor } from '../lib/closet-groups'
 import { formatClothingSize } from '../lib/clothing-display'
-import { createOutfitPair, deleteOutfitPair, listOutfitPairs, type OutfitPair } from '../lib/outfits'
+import { createOutfit, deleteOutfit, listOutfits, type OutfitSet } from '../lib/outfits'
 import type { ClothingItem } from '../types/clothing'
 
 const route = useRoute()
 const router = useRouter()
 const session = useSession()
 const items = ref<ClothingItem[]>([])
-const outfits = ref<OutfitPair[]>([])
+const outfits = ref<OutfitSet[]>([])
 const imageUrls = ref<Record<string, string>>({})
 let imageSigning = false
 let imageSigningQueued = false
@@ -23,7 +23,7 @@ const deletingId = ref('')
 const errorMessage = ref('')
 const formError = ref('')
 const title = ref('')
-const upperId = ref('')
+const upperIds = ref<string[]>([])
 const lowerId = ref('')
 const upperQuery = ref('')
 const lowerQuery = ref('')
@@ -31,20 +31,29 @@ const visibleCount = ref(10)
 
 const upperItems = computed(() => items.value.filter(item => ['トップス', 'アウター'].includes(closetGroupFor(item))))
 const lowerItems = computed(() => items.value.filter(item => closetGroupFor(item) === 'ボトムス'))
-const selectedUpper = computed(() => upperItems.value.find(item => item.id === upperId.value) ?? null)
+const selectedUppers = computed(() => upperIds.value
+  .map(id => upperItems.value.find(item => item.id === id))
+  .filter((item): item is ClothingItem => Boolean(item)))
 const selectedLower = computed(() => lowerItems.value.find(item => item.id === lowerId.value) ?? null)
-const filteredUpperItems = computed(() => matchingItems(upperItems.value, upperQuery.value, upperId.value))
-const filteredLowerItems = computed(() => matchingItems(lowerItems.value, lowerQuery.value, lowerId.value))
+const filteredUpperItems = computed(() => matchingItems(upperItems.value, upperQuery.value, upperIds.value))
+const filteredLowerItems = computed(() => matchingItems(lowerItems.value, lowerQuery.value, lowerId.value ? [lowerId.value] : []))
 const visibleOutfits = computed(() => outfits.value.slice(0, visibleCount.value))
 
-function matchingItems(candidates: ClothingItem[], query: string, selectedId: string): ClothingItem[] {
+function matchingItems(candidates: ClothingItem[], query: string, selectedIds: string[]): ClothingItem[] {
   const term = query.trim().toLocaleLowerCase()
   if (!term) return candidates
   const matches = candidates.filter(item =>
     [item.name, item.brand, item.color, item.size ?? ''].join(' ').toLocaleLowerCase().includes(term),
   )
-  const selected = candidates.find(item => item.id === selectedId)
-  return selected && !matches.some(item => item.id === selected.id) ? [selected, ...matches] : matches
+  const selected = candidates.filter(item => selectedIds.includes(item.id) && !matches.some(match => match.id === item.id))
+  return [...selected, ...matches]
+}
+
+function toggleUpper(id: string) {
+  upperIds.value = upperIds.value.includes(id)
+    ? upperIds.value.filter(selectedId => selectedId !== id)
+    : [...upperIds.value, id]
+  formError.value = ''
 }
 
 function optionLabel(item: ClothingItem): string {
@@ -57,6 +66,13 @@ function savedDate(value: string): string {
   return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' }).format(date)
 }
 
+function outfitParts(outfit: OutfitSet): Array<{ role: string, piece: ClothingItem }> {
+  return [
+    ...outfit.tops.map((piece, index) => ({ role: outfit.tops.length > 1 ? `上${index + 1}` : '上', piece })),
+    { role: '下', piece: outfit.bottom },
+  ]
+}
+
 async function applyPreselectedItem() {
   const selectedId = typeof route.query.clothing_id === 'string' ? route.query.clothing_id : ''
   if (!selectedId) return
@@ -65,7 +81,7 @@ async function applyPreselectedItem() {
     formError.value = '選択したアイテムをコーデに使用できません。'
   } else {
     const group = closetGroupFor(selected)
-    if (['トップス', 'アウター'].includes(group)) upperId.value = selected.id
+    if (['トップス', 'アウター'].includes(group)) upperIds.value = [selected.id]
     else if (group === 'ボトムス') lowerId.value = selected.id
     else formError.value = 'トップス・アウター・ボトムスから選択してください。'
   }
@@ -82,8 +98,8 @@ async function signVisibleImages() {
     do {
       imageSigningQueued = false
       const clothing = [
-        ...visibleOutfits.value.flatMap(outfit => [outfit.top, outfit.bottom]),
-        selectedUpper.value,
+        ...visibleOutfits.value.flatMap(outfit => [...outfit.tops, outfit.bottom]),
+        ...selectedUppers.value,
         selectedLower.value,
       ]
       const pending = [...new Set(clothing.map(item => item?.image_path).filter((path): path is string => Boolean(path)))]
@@ -100,7 +116,7 @@ async function signVisibleImages() {
   }
 }
 
-watch([visibleOutfits, selectedUpper, selectedLower], signVisibleImages)
+watch([visibleOutfits, selectedUppers, selectedLower], signVisibleImages)
 
 async function load() {
   const userId = session.value?.user.id
@@ -108,7 +124,7 @@ async function load() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [clothing, saved] = await Promise.all([listClothing(userId), listOutfitPairs(userId)])
+    const [clothing, saved] = await Promise.all([listClothing(userId), listOutfits(userId)])
     items.value = clothing
     outfits.value = saved
     visibleCount.value = 10
@@ -124,18 +140,18 @@ async function save() {
   const userId = session.value?.user.id
   if (!userId || saving.value) return
   formError.value = ''
-  if (!selectedUpper.value || !selectedLower.value) {
-    formError.value = '上に着るものと下に着るものを1着ずつ選んでください。'
+  if (!selectedUppers.value.length || !selectedLower.value) {
+    formError.value = '上に着るものを1着以上と、下に着るものを1着選んでください。'
     return
   }
   saving.value = true
   try {
-    const fallbackTitle = `${selectedUpper.value.name} × ${selectedLower.value.name}`
-    await createOutfitPair(userId, title.value.trim() || fallbackTitle, selectedUpper.value.id, selectedLower.value.id)
-    outfits.value = await listOutfitPairs(userId)
+    const fallbackTitle = `${selectedUppers.value.map(item => item.name).join(' + ')} × ${selectedLower.value.name}`
+    await createOutfit(userId, title.value.trim() || fallbackTitle, upperIds.value, selectedLower.value.id)
+    outfits.value = await listOutfits(userId)
     visibleCount.value = 10
     title.value = ''
-    upperId.value = ''
+    upperIds.value = []
     lowerId.value = ''
     upperQuery.value = ''
     lowerQuery.value = ''
@@ -146,14 +162,14 @@ async function save() {
   }
 }
 
-async function remove(outfit: OutfitPair) {
+async function remove(outfit: OutfitSet) {
   const userId = session.value?.user.id
   if (!userId || deletingId.value) return
   if (!window.confirm(`「${outfit.title}」を削除しますか？洋服は削除されません。`)) return
   deletingId.value = outfit.id
   errorMessage.value = ''
   try {
-    await deleteOutfitPair(outfit.id, userId)
+    await deleteOutfit(outfit.id, userId)
     outfits.value = outfits.value.filter(saved => saved.id !== outfit.id)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'コーデを削除できませんでした。'
@@ -177,28 +193,35 @@ onMounted(load)
       <p v-if="errorMessage" role="alert" class="mt-5 rounded-xl bg-red-50 px-4 py-3 text-xs text-red-700">{{ errorMessage }}</p>
       <section class="surface-card p-5">
         <h2 class="text-base font-bold">新しい組み合わせ</h2>
-        <p class="mt-1 text-xs leading-5 text-neutral-500">上はトップス・アウター、下はボトムスから選べます。</p>
+        <p class="mt-1 text-xs leading-5 text-neutral-500">上はトップス・アウターを複数選択でき、下はボトムスを1着選べます。</p>
         <form class="mt-5 space-y-5" @submit.prevent="save">
           <div>
             <label for="outfit-title" class="field-label">コーデ名</label>
             <input id="outfit-title" v-model="title" type="text" class="field-input" maxlength="120" placeholder="例：休日の定番（省略可）" />
           </div>
-          <div>
-            <label for="upper-item" class="field-label">上に着るもの <span class="text-red-500">*</span></label>
+          <fieldset class="min-w-0">
+            <legend class="field-label">上に着るもの（複数選択可） <span class="text-red-500">*</span></legend>
             <input v-model="upperQuery" type="search" class="field-input mb-2" placeholder="名前・ブランド・色で絞り込む" aria-label="上に着るものを検索" />
-            <select id="upper-item" v-model="upperId" class="field-select" required>
-              <option value="" disabled>選択してください（{{ upperItems.length }} 着）</option>
-              <option v-for="candidate in filteredUpperItems" :key="candidate.id" :value="candidate.id">{{ optionLabel(candidate) }}</option>
-            </select>
-            <p v-if="upperQuery" class="mt-1 text-[11px] text-neutral-500">候補 {{ filteredUpperItems.length }} 着</p>
-            <div v-if="selectedUpper" class="mt-3 flex items-center gap-3 rounded-xl bg-neutral-50 p-2">
-              <div class="flex h-16 w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#ecece9] text-neutral-300">
-                <img v-if="selectedUpper.image_path && imageUrls[selectedUpper.image_path]" :src="imageUrls[selectedUpper.image_path]" :alt="selectedUpper.name" class="h-full w-full object-contain" />
-                <AppIcon v-else name="shirt" :size="25" />
-              </div>
-              <div class="min-w-0"><p class="truncate text-[10px] font-semibold text-neutral-400">{{ selectedUpper.brand }}</p><p class="mt-1 text-xs font-semibold leading-5">{{ selectedUpper.name }}</p></div>
+            <div class="max-h-56 overflow-y-auto rounded-xl border border-neutral-200 bg-white p-1" role="group" aria-label="上に着るものの候補">
+              <label v-for="candidate in filteredUpperItems" :key="candidate.id" class="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-neutral-50">
+                <input type="checkbox" class="h-4 w-4 shrink-0 accent-neutral-950" :checked="upperIds.includes(candidate.id)" @change="toggleUpper(candidate.id)" />
+                <span class="min-w-0 truncate text-xs font-medium">{{ optionLabel(candidate) }}</span>
+              </label>
+              <p v-if="!filteredUpperItems.length" class="px-3 py-5 text-center text-xs text-neutral-500">該当するアイテムがありません。</p>
             </div>
-          </div>
+            <p class="mt-2 text-[11px] text-neutral-500">{{ selectedUppers.length }} 着を選択中<span v-if="upperQuery">・候補 {{ filteredUpperItems.length }} 着</span></p>
+            <div v-if="selectedUppers.length" class="mt-3 space-y-2">
+              <div v-for="(selectedUpper, index) in selectedUppers" :key="selectedUpper.id" class="flex items-center gap-3 rounded-xl bg-neutral-50 p-2">
+                <div class="flex h-16 w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#ecece9] text-neutral-300">
+                  <img v-if="selectedUpper.image_path && imageUrls[selectedUpper.image_path]" :src="imageUrls[selectedUpper.image_path]" :alt="selectedUpper.name" class="h-full w-full object-contain" />
+                  <AppIcon v-else name="shirt" :size="25" />
+                </div>
+                <div class="min-w-0 flex-1"><p class="truncate text-[10px] font-semibold text-neutral-400">上{{ index + 1 }} · {{ selectedUpper.brand }}</p><p class="mt-1 text-xs font-semibold leading-5">{{ selectedUpper.name }}</p></div>
+                <button type="button" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-white" :aria-label="`${selectedUpper.name}を選択解除`" @click="toggleUpper(selectedUpper.id)"><AppIcon name="close" :size="16" /></button>
+              </div>
+            </div>
+            <p v-if="selectedUppers.length > 1" class="mt-2 text-[10px] leading-4 text-neutral-400">選択した順番で上1、上2…として保存します。</p>
+          </fieldset>
           <div>
             <label for="lower-item" class="field-label">下に着るもの <span class="text-red-500">*</span></label>
             <input v-model="lowerQuery" type="search" class="field-input mb-2" placeholder="名前・ブランド・色で絞り込む" aria-label="下に着るものを検索" />
@@ -229,8 +252,9 @@ onMounted(load)
             <div class="min-w-0"><h3 class="break-words text-sm font-bold">{{ outfit.title }}</h3><p class="mt-1 text-[11px] text-neutral-400">{{ savedDate(outfit.created_at) }}</p></div>
             <button type="button" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50" :disabled="Boolean(deletingId)" :aria-label="`${outfit.title}を削除`" @click="remove(outfit)"><AppIcon name="trash" :size="17" /></button>
           </div>
-          <div class="mt-3 grid grid-cols-2 gap-3">
-            <div v-for="part in [{ role: '上', piece: outfit.top }, { role: '下', piece: outfit.bottom }]" :key="part.role" class="min-w-0">
+          <p class="mt-1 text-[10px] text-neutral-400">上 {{ outfit.tops.length }} 着・下 1 着</p>
+          <div class="mt-3 grid gap-3" :class="outfitParts(outfit).length === 2 ? 'grid-cols-2' : 'grid-cols-3'">
+            <div v-for="part in outfitParts(outfit)" :key="`${part.role}-${part.piece.id}`" class="min-w-0">
               <div class="relative aspect-[4/5] overflow-hidden rounded-xl bg-[#ecece9]">
                 <img v-if="part.piece.image_path && imageUrls[part.piece.image_path]" :src="imageUrls[part.piece.image_path]" :alt="part.piece.name" class="h-full w-full object-contain" loading="lazy" />
                 <div v-else class="flex h-full items-center justify-center text-neutral-300"><AppIcon name="shirt" :size="35" /></div>
