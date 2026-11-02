@@ -31,3 +31,13 @@ export function closetGroupFor(item: ItemForGrouping): ClosetGroup {
         : 'その他'
   }
 }
+
+export function sortClothingByGroup<T extends ItemForGrouping>(items: T[]): T[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((first, second) =>
+      closetGroups.indexOf(closetGroupFor(first.item)) - closetGroups.indexOf(closetGroupFor(second.item)) ||
+      first.index - second.index,
+    )
+    .map(({ item }) => item)
+}

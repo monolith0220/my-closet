@@ -6,6 +6,7 @@ import SearchView from './SearchView.vue'
 import { useSession } from '../lib/auth-context'
 import { deleteClothing, listClothing, signedClothingImages } from '../lib/clothing'
 import { clothingSortOptions, sortClothing, type ClothingSort } from '../lib/clothing-display'
+import { closetGroupFor, closetGroups, sortClothingByGroup } from '../lib/closet-groups'
 import { criteriaFromQuery, filterClothingItems } from '../lib/closet-search'
 import { closetSubcategories, closetSubcategoryFor, sortClothingBySubcategory } from '../lib/closet-subcategories'
 import type { ClothingItem } from '../types/clothing'
@@ -149,12 +150,20 @@ const sortedItems = computed(() => {
     ? requestedSort as ClothingSort
     : 'newest'
   const sorted = sortClothing(filteredItems.value, sort)
+  if (!hasSearch.value) return sortClothingByGroup(sorted)
   const category = searchCriteria.value.category
   if (!category || searchCriteria.value.subcategory) return sorted
   return sortClothingBySubcategory(sorted, category)
 })
 const visibleItems = computed(() => sortedItems.value.slice(0, visibleCount.value))
 const visibleSections = computed(() => {
+  if (!hasSearch.value) {
+    return closetGroups.map(label => ({
+      label,
+      total: sortedItems.value.filter(item => closetGroupFor(item) === label).length,
+      items: visibleItems.value.filter(item => closetGroupFor(item) === label),
+    })).filter(section => section.items.length)
+  }
   const category = searchCriteria.value.category
   if (!groupBySubcategory.value || !category) {
     return [{ label: '', total: sortedItems.value.length, items: visibleItems.value }]

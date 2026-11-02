@@ -81,7 +81,7 @@ onMounted(load)
     <p class="mt-1 text-[11px] leading-5 text-neutral-400">季節未設定の服は通年アイテムとして候補に含めます。</p>
 
     <div v-if="loading" class="mt-8 space-y-4" aria-label="提案を読み込み中">
-      <div v-for="index in 2" :key="index" class="h-64 animate-pulse rounded-2xl bg-neutral-200" />
+      <div v-for="index in 2" :key="index" class="h-96 animate-pulse rounded-2xl bg-neutral-200" />
     </div>
     <div v-else-if="errorMessage && !items.length" role="alert" class="surface-card mt-8 px-5 py-8 text-center">
       <p class="text-sm text-red-700">{{ errorMessage }}</p>
@@ -104,15 +104,18 @@ onMounted(load)
             <h2 class="text-sm font-bold">提案 {{ index + 1 }}</h2>
             <span class="text-[10px] text-neutral-400">上下セット</span>
           </div>
+          <div class="relative mt-3 overflow-hidden rounded-2xl bg-[#ecece9]" :aria-label="`${pair.top.name}と${pair.bottom.name}の組み合わせ画像`">
+            <RouterLink v-for="part in [{ role: '上', piece: pair.top }, { role: '下', piece: pair.bottom }]" :key="part.role" :to="{ path: '/closet/' + part.piece.id, query: { from: 'ai' } }" class="relative flex aspect-[8/5] items-center justify-center overflow-hidden border-white/80 first:border-b" :class="part.role === '上' ? 'bg-[#f0f0ed]' : 'bg-[#e8e8e5]'" :aria-label="part.role + '：' + part.piece.name + 'の詳細を見る'">
+              <img v-if="part.piece.image_path && imageUrls[part.piece.image_path]" :src="imageUrls[part.piece.image_path]" :alt="part.piece.name" class="h-full w-full object-contain" loading="lazy" />
+              <AppIcon v-else name="shirt" :size="42" class="text-neutral-300" />
+              <span class="absolute left-2 top-2 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold shadow-sm">{{ part.role }}</span>
+            </RouterLink>
+            <span class="pointer-events-none absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-neutral-950 text-white shadow-md" aria-hidden="true"><AppIcon name="sparkles" :size="17" /></span>
+          </div>
           <div class="mt-3 grid grid-cols-2 gap-3">
-            <RouterLink v-for="part in [{ role: '上', piece: pair.top }, { role: '下', piece: pair.bottom }]" :key="part.role" :to="{ path: '/closet/' + part.piece.id, query: { from: 'ai' } }" class="min-w-0" :aria-label="part.role + '：' + part.piece.name + 'の詳細を見る'">
-              <div class="relative aspect-[4/5] overflow-hidden rounded-xl bg-[#ecece9]">
-                <img v-if="part.piece.image_path && imageUrls[part.piece.image_path]" :src="imageUrls[part.piece.image_path]" :alt="part.piece.name" class="h-full w-full object-contain" loading="lazy" />
-                <div v-else class="flex h-full items-center justify-center text-neutral-300"><AppIcon name="shirt" :size="35" /></div>
-                <span class="absolute bottom-2 left-2 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold">{{ part.role }}</span>
-              </div>
-              <p class="mt-2 truncate text-[10px] font-semibold text-neutral-400">{{ part.piece.brand }}</p>
-              <p class="mt-0.5 line-clamp-2 min-h-9 text-xs font-semibold leading-4">{{ part.piece.name }}</p>
+            <RouterLink v-for="part in [{ role: '上', piece: pair.top }, { role: '下', piece: pair.bottom }]" :key="part.role" :to="{ path: '/closet/' + part.piece.id, query: { from: 'ai' } }" class="min-w-0 rounded-xl bg-neutral-50 p-3" :aria-label="part.role + '：' + part.piece.name + 'の詳細を見る'">
+              <p class="text-[10px] font-semibold text-neutral-400">{{ part.role }} · {{ part.piece.brand }}</p>
+              <p class="mt-1 line-clamp-2 text-xs font-semibold leading-4">{{ part.piece.name }}</p>
             </RouterLink>
           </div>
           <button type="button" class="secondary-button mt-4 w-full" :disabled="Boolean(savingKey)" @click="save(pair.top, pair.bottom)">
