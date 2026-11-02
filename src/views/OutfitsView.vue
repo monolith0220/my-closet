@@ -3,8 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import { useSession } from '../lib/auth-context'
 import { signedClothingImages } from '../lib/clothing'
-import { outfitRoleLabel } from '../lib/outfit-selection'
-import { deleteOutfit, listOutfits, type OutfitSet } from '../lib/outfits'
+import { outfitRoleLabel, type OutfitItemRole } from '../lib/outfit-selection'
+import { deleteOutfit, listOutfits, type OutfitPiece, type OutfitSet } from '../lib/outfits'
 
 const session = useSession()
 const outfits = ref<OutfitSet[]>([])
@@ -29,6 +29,17 @@ function pieceSummary(outfit: OutfitSet): string {
   if (outfit.inners.length) labels.push(`インナー ${outfit.inners.length}`)
   if (outfit.bottom) labels.push('ボトムス 1')
   return labels.join(' ・ ')
+}
+
+function primaryPieces(outfit: OutfitSet): OutfitPiece[] {
+  const backToFront: OutfitItemRole[] = ['bottom', 'inner', 'outer']
+  return backToFront
+    .map(role => outfit.pieces.find(piece => piece.role === role && piece.position === 0))
+    .filter((piece): piece is OutfitPiece => Boolean(piece))
+}
+
+function boardPieceClass(piece: OutfitPiece): string {
+  return `outfit-board-piece outfit-board-piece--${piece.role}`
 }
 
 async function signVisibleImages() {
@@ -121,20 +132,184 @@ onMounted(load)
           </div>
           <button type="button" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-red-600 hover:bg-red-50 disabled:opacity-50" :disabled="Boolean(deletingId)" :aria-label="`コーデ${outfit.list_number}を削除`" @click="remove(outfit)"><AppIcon name="trash" :size="17" /></button>
         </div>
-        <p class="mt-1 text-[10px] text-neutral-400">{{ pieceSummary(outfit) }}</p>
-        <div class="mt-3 grid grid-cols-3 gap-3">
-          <div v-for="piece in outfit.pieces" :key="`${piece.role}-${piece.position}-${piece.item.id}`" class="min-w-0">
-            <div class="relative aspect-[4/5] overflow-hidden rounded-xl bg-[#ecece9]">
-              <img v-if="piece.item.image_path && imageUrls[piece.item.image_path]" :src="imageUrls[piece.item.image_path]" :alt="piece.item.name" class="h-full w-full object-contain" loading="lazy" />
-              <div v-else class="flex h-full items-center justify-center text-neutral-300"><AppIcon name="shirt" :size="35" /></div>
-              <span class="absolute bottom-2 left-2 rounded-md bg-white/90 px-2 py-1 text-[9px] font-semibold">{{ outfitRoleLabel(piece.role, piece.position) }}</span>
+        <div class="mt-1 flex items-center justify-between gap-2">
+          <p class="text-[10px] text-neutral-400">{{ pieceSummary(outfit) }}</p>
+          <span class="text-[9px] font-semibold tracking-wide text-neutral-400">重ね着プレビュー</span>
+        </div>
+
+        <div class="outfit-board mt-3" :class="{ 'outfit-board--no-outer': !outfit.outers.length, 'outfit-board--no-inner': !outfit.inners.length, 'outfit-board--no-bottom': !outfit.bottom }" :aria-label="`コーデ${outfit.list_number}の重ね着イメージ`">
+          <div class="outfit-board-light" aria-hidden="true" />
+          <component
+            :is="piece.item.is_active ? 'RouterLink' : 'div'"
+            v-for="piece in primaryPieces(outfit)"
+            :key="`board-${piece.role}-${piece.item.id}`"
+            :to="piece.item.is_active ? `/closet/${piece.item.id}` : undefined"
+            :class="boardPieceClass(piece)"
+            :aria-label="piece.item.is_active ? `${outfitRoleLabel(piece.role, piece.position)}：${piece.item.name}の詳細を見る` : undefined"
+          >
+            <img v-if="piece.item.image_path && imageUrls[piece.item.image_path]" :src="imageUrls[piece.item.image_path]" :alt="piece.item.name" class="outfit-board-image" loading="lazy" />
+            <div v-else class="outfit-board-placeholder"><AppIcon name="shirt" :size="38" /><span>NO PHOTO</span></div>
+            <span class="outfit-board-label">{{ outfitRoleLabel(piece.role, piece.position) }}</span>
+          </component>
+        </div>
+
+        <div class="mt-3 grid grid-cols-2 gap-2" aria-label="コーデのアイテム一覧">
+          <component
+            :is="piece.item.is_active ? 'RouterLink' : 'div'"
+            v-for="piece in outfit.pieces"
+            :key="`detail-${piece.role}-${piece.position}-${piece.item.id}`"
+            :to="piece.item.is_active ? `/closet/${piece.item.id}` : undefined"
+            class="flex min-w-0 items-center gap-2 rounded-xl border border-neutral-100 bg-neutral-50/80 p-2"
+          >
+            <div class="flex h-14 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#ebe9e4] text-neutral-300">
+              <img v-if="piece.item.image_path && imageUrls[piece.item.image_path]" :src="imageUrls[piece.item.image_path]" :alt="piece.item.name" class="h-full w-full object-contain mix-blend-multiply" loading="lazy" />
+              <AppIcon v-else name="shirt" :size="22" />
             </div>
-            <RouterLink v-if="piece.item.is_active" :to="`/closet/${piece.item.id}`" class="mt-2 block truncate text-xs font-semibold text-neutral-900 underline-offset-2 hover:underline">{{ piece.item.name }}</RouterLink>
-            <p v-else class="mt-2 truncate text-xs font-semibold text-neutral-500">{{ piece.item.name }} <span class="text-[10px]">（登録解除済み）</span></p>
-          </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-[9px] font-bold text-neutral-500">{{ outfitRoleLabel(piece.role, piece.position) }}</p>
+              <p class="mt-0.5 line-clamp-2 text-[10px] font-semibold leading-4" :class="piece.item.is_active ? 'text-neutral-800' : 'text-neutral-400'">{{ piece.item.name }}</p>
+            </div>
+          </component>
         </div>
       </article>
       <button v-if="visibleOutfits.length < outfits.length" type="button" class="secondary-button mt-4 w-full" @click="visibleCount += 10">さらに表示（{{ outfits.length - visibleOutfits.length }} リスト）</button>
     </template>
   </main>
 </template>
+
+<style scoped>
+.outfit-board {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border: 1px solid rgba(120, 112, 99, 0.12);
+  border-radius: 1rem;
+  background-color: #dedbd4;
+  background-image:
+    radial-gradient(circle at 18% 16%, rgba(255,255,255,.58), transparent 32%),
+    radial-gradient(circle at 82% 84%, rgba(108,99,85,.1), transparent 38%),
+    linear-gradient(145deg, rgba(255,255,255,.16), rgba(96,89,78,.05));
+  box-shadow: inset 0 0 44px rgba(94, 87, 76, 0.08);
+}
+
+.outfit-board::after {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  content: '';
+  opacity: .28;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.16'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+}
+
+.outfit-board-light {
+  position: absolute;
+  inset: 8% 10%;
+  z-index: 0;
+  border-radius: 50%;
+  background: rgba(255,255,255,.28);
+  filter: blur(28px);
+}
+
+.outfit-board-piece {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: .75rem;
+  color: #8b877f;
+  transition: transform .18s ease;
+}
+
+.outfit-board-piece:hover { transform: translateY(-2px) scale(1.01); }
+
+.outfit-board-piece--bottom {
+  top: 42%;
+  left: 20%;
+  z-index: 10;
+  width: 60%;
+  height: 54%;
+}
+
+.outfit-board-piece--inner {
+  top: 12%;
+  left: 25%;
+  z-index: 20;
+  width: 50%;
+  height: 44%;
+}
+
+.outfit-board-piece--outer {
+  top: 5%;
+  left: 10%;
+  z-index: 30;
+  width: 80%;
+  height: 55%;
+}
+
+.outfit-board--no-outer .outfit-board-piece--inner {
+  top: 7%;
+  left: 17%;
+  width: 66%;
+  height: 52%;
+}
+
+.outfit-board--no-inner .outfit-board-piece--outer {
+  top: 7%;
+  left: 13%;
+  width: 74%;
+  height: 54%;
+}
+
+.outfit-board--no-outer.outfit-board--no-inner .outfit-board-piece--bottom {
+  top: 12%;
+  left: 17%;
+  width: 66%;
+  height: 76%;
+}
+
+.outfit-board--no-bottom .outfit-board-piece--outer,
+.outfit-board--no-bottom .outfit-board-piece--inner {
+  top: 17%;
+}
+
+.outfit-board-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 10px rgba(59, 54, 46, .17));
+  mix-blend-mode: multiply;
+}
+
+.outfit-board-placeholder {
+  display: flex;
+  width: 68%;
+  height: 68%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  border: 1px dashed rgba(96, 91, 82, .28);
+  border-radius: 1rem;
+  background: rgba(255,255,255,.18);
+  font-size: .55rem;
+  letter-spacing: .08em;
+}
+
+.outfit-board-label {
+  position: absolute;
+  right: .2rem;
+  bottom: .2rem;
+  padding: .2rem .42rem;
+  border: 1px solid rgba(255,255,255,.68);
+  border-radius: .4rem;
+  background: rgba(255,255,255,.8);
+  color: #34312c;
+  font-size: .55rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 3px 10px rgba(66,60,50,.08);
+  backdrop-filter: blur(6px);
+}
+</style>
