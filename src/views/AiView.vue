@@ -50,7 +50,7 @@ async function load() {
     const [clothing, saved] = await Promise.all([listClothing(userId), listOutfits(userId)])
     items.value = clothing
     savedKeys.value = new Set(saved.flatMap(outfit =>
-      outfit.tops.map(top => outfitPairKey(top.id, outfit.bottom.id)),
+      outfit.bottom ? outfit.tops.map(top => outfitPairKey(top.id, outfit.bottom!.id)) : [],
     ))
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'コーデの候補を読み込めませんでした。'
@@ -67,9 +67,9 @@ async function save(top: ClothingItem, bottom: ClothingItem) {
   errorMessage.value = ''
   saveMessage.value = ''
   try {
-    await createOutfit(userId, top.name + ' × ' + bottom.name, [top.id], bottom.id)
+    const created = await createOutfit(userId, top.name + ' × ' + bottom.name, [top.id], bottom.id)
     savedKeys.value = new Set([...savedKeys.value, key])
-    saveMessage.value = 'コーデに保存しました。'
+    saveMessage.value = `コーデ${created.list_number}に保存しました。`
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'コーデを保存できませんでした。'
   } finally {

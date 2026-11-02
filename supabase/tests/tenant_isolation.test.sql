@@ -2,7 +2,7 @@
 -- Seed rows as the test runner's privileged role, then exercise the actual client roles.
 begin;
 
-select plan(61);
+select plan(63);
 
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'closet-owner@example.test'),
@@ -155,10 +155,11 @@ select throws_ok(
 );
 
 select results_eq($$select title from public.outfits$$, array['Owner outfit'], 'owner reads only their outfits');
+select results_eq($$select list_number from public.outfits$$, array[1], 'outfit lists are numbered from one for each owner');
 select results_eq(
   $$insert into public.outfits (id, title)
-    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'New outfit') returning title$$,
-  array['New outfit'], 'owner can add an outfit'
+    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'New outfit') returning list_number$$,
+  array[2], 'owner can add the next numbered outfit list'
 );
 select throws_ok(
   $$insert into public.outfits (user_id, title)
@@ -174,18 +175,23 @@ select is_empty(
   'owner cannot delete another user outfit'
 );
 
-select results_eq($$select role from public.outfit_items$$, array['main'], 'owner reads only their outfit links');
+select results_eq($$select role from public.outfit_items$$, array['inner'], 'owner reads only their outfit links');
 select results_eq(
   $$insert into public.outfit_items (outfit_id, clothing_item_id, role)
-    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'top')
+    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'inner')
     returning role$$,
-  array['top'], 'owner can link their own clothing to their own outfit'
+  array['inner'], 'owner can link their own clothing as an inner layer'
 );
 select results_eq(
   $$insert into public.outfit_items (outfit_id, clothing_item_id, role, position)
-    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'top', 1)
+    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'inner', 1)
     returning position$$,
-  array[1], 'an outfit can have multiple ordered tops'
+  array[1], 'an outfit can have multiple numbered inner layers'
+);
+select throws_ok(
+  $$update public.outfit_items set role = 'top'
+    where outfit_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5' and position = 1$$,
+  '23514', null, 'legacy generic top roles are rejected'
 );
 select throws_ok(
   $$insert into public.outfit_items (outfit_id, clothing_item_id, user_id)

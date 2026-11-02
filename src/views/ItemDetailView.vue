@@ -7,6 +7,7 @@ import { deleteClothing, getClothing, recordClothingView, setClothingFavorite, s
 import { formatClothingSize, purchaseDateFor, stripPurchaseDateFromMemo } from '../lib/clothing-display'
 import { closetGroupFor } from '../lib/closet-groups'
 import { closetSubcategoryFor } from '../lib/closet-subcategories'
+import { addClothingToOutfit, createOutfitWithItem, listOutfits, type OutfitSet } from '../lib/outfits'
 import type { ClothingItem } from '../types/clothing'
 
 const route = useRoute()
@@ -19,6 +20,14 @@ const deleting = ref(false)
 const favoriteBusy = ref(false)
 const ratingBusy = ref(false)
 const errorMessage = ref('')
+const outfitDialogOpen = ref(false)
+const outfitLoading = ref(false)
+const outfitSaving = ref(false)
+const outfitError = ref('')
+const outfitMessage = ref('')
+const outfitMode = ref<'existing' | 'new'>('existing')
+const selectedOutfitId = ref('')
+const savedOutfits = ref<OutfitSet[]>([])
 const itemId = computed(() => String(route.params.id ?? ''))
 const returnLocation = computed(() => route.query.from === 'ai'
   ? { path: '/ai' }
@@ -27,6 +36,7 @@ const ratingOptions = [1, 2, 3, 4, 5] as const
 const itemCategoryGroup = computed(() => item.value ? closetGroupFor(item.value) : 'その他')
 const itemSubcategory = computed(() => item.value ? closetSubcategoryFor(item.value, itemCategoryGroup.value) : 'その他')
 const canSelectForOutfit = computed(() => ['トップス', 'アウター', 'ボトムス'].includes(itemCategoryGroup.value))
+const nextOutfitNumber = computed(() => Math.max(0, ...savedOutfits.value.map(outfit => outfit.list_number)) + 1)
 const purchaseDate = computed(() => item.value ? purchaseDateFor(item.value)?.replaceAll('-', '/') ?? null : null)
 const visibleMemo = computed(() => stripPurchaseDateFromMemo(item.value?.memo ?? null) || null)
 const productLink = computed(() => {
@@ -37,6 +47,73 @@ const productLink = computed(() => {
     return ['https:', 'http:'].includes(url.protocol) ? url.href : null
   } catch { return null }
 })
+
+function outfitUnavailableReason(outfit: OutfitSet): string | null {
+  if (!item.value) return 'アイテムを確認できません'
+  if (outfit.pieces.some(piece => piece.item.id === item.value?.id)) return '登録済み'
+  if (itemCategoryGroup.value === 'ボトムス' && outfit.bottom) return 'ボトムス登録済み'
+  return null
+}
+
+function assignedRoleLabel(outfit?: OutfitSet): string {
+  if (itemCategoryGroup.value === 'アウター') return `アウター${(outfit?.outers.length ?? 0) + 1}`
+  if (itemCategoryGroup.value === 'トップス') return `インナー${(outfit?.inners.length ?? 0) + 1}`
+  return 'ボトムス1'
+}
+
+async function openOutfitDialog() {
+  const userId = session.value?.user.id
+  if (!userId || !item.value || outfitLoading.value) return
+  outfitDialogOpen.value = true
+  outfitLoading.value = true
+  outfitError.value = ''
+  try {
+    savedOutfits.value = await listOutfits(userId)
+    const firstAvailable = savedOutfits.value.find(outfit => !outfitUnavailableReason(outfit))
+    if (firstAvailable) {
+      outfitMode.value = 'existing'
+      selectedOutfitId.value = firstAvailable.id
+    } else {
+      outfitMode.value = 'new'
+      selectedOutfitId.value = ''
+    }
+  } catch (error) {
+    outfitError.value = error instanceof Error ? error.message : 'コーデリストを読み込めませんでした。'
+  } finally {
+    outfitLoading.value = false
+  }
+}
+
+function closeOutfitDialog() {
+  if (outfitSaving.value) return
+  outfitDialogOpen.value = false
+  outfitError.value = ''
+}
+
+async function registerToOutfit() {
+  const userId = session.value?.user.id
+  if (!userId || !item.value || outfitSaving.value) return
+  outfitError.value = ''
+  outfitSaving.value = true
+  try {
+    let listNumber: number
+    if (outfitMode.value === 'new') {
+      const created = await createOutfitWithItem(userId, item.value.id)
+      listNumber = created.list_number
+    } else {
+      const selected = savedOutfits.value.find(outfit => outfit.id === selectedOutfitId.value)
+      if (!selected || outfitUnavailableReason(selected)) throw new Error('登録先のコーデを選んでください。')
+      await addClothingToOutfit(userId, selected.id, item.value.id)
+      listNumber = selected.list_number
+    }
+    outfitMessage.value = `コーデ${listNumber}に${assignedRoleLabel(outfitMode.value === 'existing' ? savedOutfits.value.find(outfit => outfit.id === selectedOutfitId.value) : undefined)}として登録しました。`
+    outfitDialogOpen.value = false
+  } catch (error) {
+    outfitError.value = error instanceof Error ? error.message : 'コーデに登録できませんでした。'
+  } finally {
+    outfitSaving.value = false
+  }
+}
 
 async function load() {
   const userId = session.value?.user.id
@@ -111,7 +188,7 @@ onMounted(load)
       <button type="button" class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-800" :aria-label="route.query.from === 'ai' ? '提案に戻る' : '一覧に戻る'" @click="router.push(returnLocation)"><AppIcon name="arrow-left" :size="20" /></button>
       <p class="eyebrow absolute left-1/2 -translate-x-1/2">ITEM DETAILS</p>
       <div v-if="item" class="flex items-center gap-2">
-        <RouterLink v-if="canSelectForOutfit" :to="{ path: '/outfits', query: { clothing_id: item.id } }" class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-600" aria-label="コーデに選ぶ" title="コーデに選ぶ"><AppIcon name="hanger" :size="20" /></RouterLink>
+        <button v-if="canSelectForOutfit" type="button" class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-neutral-600" aria-label="コーデに登録" title="コーデに登録" @click="openOutfitDialog"><AppIcon name="hanger" :size="20" /></button>
         <button type="button" class="flex h-10 w-10 items-center justify-center rounded-full bg-white" :class="item.is_favorite ? 'text-rose-600' : 'text-neutral-500'" :aria-label="item.is_favorite ? 'お気に入りから外す' : 'お気に入りに追加する'" :aria-pressed="item.is_favorite" :disabled="favoriteBusy" @click="toggleFavorite"><AppIcon name="heart" :size="20" :filled="item.is_favorite" /></button>
       </div>
       <div v-else class="w-[88px]" />
@@ -154,6 +231,7 @@ onMounted(load)
       </section>
 
       <section v-if="visibleMemo" class="surface-card mt-4 p-5"><h2 class="text-xs font-semibold text-neutral-400">メモ</h2><p class="mt-3 whitespace-pre-wrap text-sm leading-7 text-neutral-700">{{ visibleMemo }}</p></section>
+      <p v-if="outfitMessage" role="status" class="mt-5 rounded-xl bg-neutral-100 px-4 py-3 text-xs font-semibold text-neutral-700">{{ outfitMessage }}</p>
       <p v-if="errorMessage" role="alert" class="mt-5 rounded-xl bg-red-50 px-4 py-3 text-xs text-red-700">{{ errorMessage }}</p>
 
       <div class="mt-7 grid grid-cols-[1fr_auto] gap-3">
@@ -161,5 +239,43 @@ onMounted(load)
         <button type="button" class="secondary-button px-4 text-red-600" :disabled="deleting" aria-label="洋服を削除" @click="remove"><AppIcon name="trash" :size="19" /></button>
       </div>
     </template>
+
+    <div v-if="outfitDialogOpen" class="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-3 pb-3 pt-16 sm:items-center" role="presentation" @click.self="closeOutfitDialog">
+      <section role="dialog" aria-modal="true" aria-labelledby="outfit-dialog-title" class="max-h-full w-full max-w-md overflow-y-auto rounded-2xl bg-[#f7f7f5] p-5 shadow-2xl">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 id="outfit-dialog-title" class="text-base font-bold">コーデに登録</h2>
+            <p class="mt-1 text-xs text-neutral-500">{{ item?.name }}</p>
+          </div>
+          <button type="button" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-neutral-600" aria-label="閉じる" :disabled="outfitSaving" @click="closeOutfitDialog"><AppIcon name="close" :size="17" /></button>
+        </div>
+
+        <div v-if="outfitLoading" class="mt-6 space-y-3" aria-label="コーデリストを読み込み中">
+          <div v-for="index in 3" :key="index" class="h-14 animate-pulse rounded-xl bg-neutral-200" />
+        </div>
+        <form v-else class="mt-6 space-y-3" @submit.prevent="registerToOutfit">
+          <label class="flex cursor-pointer items-center gap-3 rounded-xl border bg-white p-4" :class="outfitMode === 'new' ? 'border-neutral-950' : 'border-neutral-200'">
+            <input v-model="outfitMode" type="radio" value="new" class="h-4 w-4 accent-neutral-950" />
+            <span class="min-w-0 flex-1"><span class="block text-sm font-semibold">新規作成</span><span class="mt-1 block text-[11px] text-neutral-500">コーデ{{ nextOutfitNumber }} ・ {{ assignedRoleLabel() }}</span></span>
+          </label>
+
+          <fieldset v-if="savedOutfits.length" class="min-w-0 space-y-2">
+            <legend class="field-label mb-2">既存のコーデから選ぶ</legend>
+            <label v-for="outfit in savedOutfits" :key="outfit.id" class="flex items-center gap-3 rounded-xl border bg-white p-4" :class="[
+              outfitMode === 'existing' && selectedOutfitId === outfit.id ? 'border-neutral-950' : 'border-neutral-200',
+              outfitUnavailableReason(outfit) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+            ]">
+              <input v-model="selectedOutfitId" type="radio" name="outfit-list" :value="outfit.id" class="h-4 w-4 accent-neutral-950" :disabled="Boolean(outfitUnavailableReason(outfit))" @change="outfitMode = 'existing'" />
+              <span class="min-w-0 flex-1"><span class="block text-sm font-semibold">コーデ{{ outfit.list_number }}</span><span class="mt-1 block text-[11px] text-neutral-500">{{ outfitUnavailableReason(outfit) || assignedRoleLabel(outfit) }}</span></span>
+            </label>
+          </fieldset>
+
+          <p v-if="outfitError" role="alert" class="rounded-xl bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{{ outfitError }}</p>
+          <button type="submit" class="primary-button w-full" :disabled="outfitSaving || (outfitMode === 'existing' && !selectedOutfitId)">
+            <AppIcon name="plus" :size="17" />{{ outfitSaving ? '登録中...' : outfitMode === 'new' ? `コーデ${nextOutfitNumber}を作成して登録` : '選んだコーデに登録' }}
+          </button>
+        </form>
+      </section>
+    </div>
   </main>
 </template>
